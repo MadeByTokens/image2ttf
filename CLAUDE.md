@@ -11,17 +11,18 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 ## Architecture
 
 ### Pipeline (wizard steps)
-1. **Upload** → loads image onto canvas; "Try with example" loads `public/font_test.png`
-2. **GridOverlay** → auto-detects grid; Advanced panel exposes 6 tunable params; Edit mode for manual cell manipulation
-3. **CharMap** → maps cells to characters, click labels to reassign
+1. **Upload** → loads image; pan/rotate/zoom viewer (mode-based: Pan/Rotate/Zoom toggle); rotation applied to canvas data
+2. **Detect** (GridOverlay) → auto-detects grid; Advanced panel (6 params); Edit mode: drag cell edges, drag orange row separators, right-click for cell/row operations (add/delete/split/relabel)
+3. **Characters** (CharMap) → maps cells to chars; editable labels; space width slider (20-150% of avg lowercase)
 4. **Preview** → traces glyphs, glyph gallery with SVG inspect/retrace/delete, live font preview via `@font-face` blob URL
 5. **Generate** → builds final TTF via opentype.js, offers download
 
 ### Key files
-- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`
-- `src/lib/segmentation.js` — grid detection with `opts` param for all thresholds; valley splitting, noise filtering
-- `src/lib/tracing.js` — imagetracerjs wrapper; filters by fill color; fixes TrueType winding
-- `src/lib/font-builder.js` — `createFont()` builds opentype.Font from glyph map
+- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent` for configurable space width.
+- `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
+- `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`
+- `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`
+- `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; reads space width from glyphMap
 - `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
 
 ## Commands
@@ -40,28 +41,30 @@ npm run deploy     # Build + publish to GitHub Pages via gh-pages
 - `$effect` tracks ALL reads in called functions. Never read+write same `$state` inside an effect. Use plain `let` for internal vars, or `untrack(() => fn())`.
 - a11y: non-button interactive elements need `role`, `tabindex`, keyboard handler.
 
-## Testing
-
-- **Unit tests** (14) — synthetic shapes for segmentation, tracing, font-builder
-- **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
-  - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
-  - Bbox-normalized IoU: avg ~0.71, thresholds: per-glyph ≥0.20, avg ≥0.30
-- `tests/validate-font.js` — standalone manual TTF validator
-
 ## Workflow Rules
 
 - **Always run tests before committing**: `npx vitest run` — all 25 tests must pass before any commit or deploy.
 - **Always run build after code changes**: `npx vite build` — verify no build errors before committing.
 - **Record discoveries**: When you find a bug, gotcha, or important insight, immediately update MEMORY.md and/or CLAUDE.md so it persists across sessions.
 
+## Testing
+
+- **Unit tests** (14) — synthetic shapes for segmentation, tracing, font-builder
+- **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
+  - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
+  - Bbox-normalized IoU: avg ~0.68, thresholds: per-glyph ≥0.20, avg ≥0.30
+- `tests/validate-font.js` — standalone manual TTF validator
+
 ## Key Gotchas
 
 - **imagetracerjs** outputs paths for ALL colors. Must filter by `fill="rgb(...)"` — only keep dark fills.
 - **TrueType winding**: trapezoidal signedArea gives negative=CW in Y-up. Outer contours must be CW (area<0), inner CCW (area>0).
-- **Grid detection**: `autoDetectGrid(imageData, opts)` accepts overrides for all 6 thresholds. Valley splitting handles lined paper merging rows. Noise rows filtered by peak < 2% of width.
-- Grid edits must call `resyncCharMap()`.
-- **Glyph scaling**: `svgPathToOpentypePath` accepts `metrics: { cellHeight, trimOffsetY }` for uniform scaling based on row height. Without this, all chars get stretched to the same height regardless of ascenders/descenders.
-- **SVG Y-flip for glyph gallery**: Font coords are Y-up, SVG is Y-down. `commandsToSvgPath` in Preview.svelte flips Y via `ASCENDER - y`.
+- **Grid detection**: `autoDetectGrid(imageData, opts)` accepts overrides for all 6 thresholds. Valley splitting handles lined paper. `detectColumns` can be re-run independently to keep row boundaries.
+- Grid edits must call `resyncCharMap()`. GridOverlay preserves edits on re-mount (only resets when user clicks Reset).
+- **Glyph scaling**: Uses single `refHeight = max(all cell heights)` across entire grid for uniform scaling. All rows share the same scale factor so uppercase/lowercase align on same baseline.
+- **SVG Y-flip for glyph gallery**: Font coords Y-up, SVG Y-down. `commandsToSvgPath` in Preview.svelte flips Y via `ASCENDER - y`.
+- **Space glyph**: Auto-generated in pipeline.js from avg lowercase width × `spaceWidthPercent`. Configurable via slider in CharMap.
+- **Version**: Injected from package.json via Vite `define` (`__APP_VERSION__`), displayed in footer.
 
 ## Deployment
 
