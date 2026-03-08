@@ -10,7 +10,7 @@
   import Preview from './Preview.svelte';
   import Generate from './Generate.svelte';
 
-  const steps = ['Upload', 'Grid', 'Characters', 'Preview', 'Generate'];
+  const steps = ['Upload', 'Detect', 'Characters', 'Preview', 'Generate'];
 
   onMount(() => {
     applyTheme(appState.theme);

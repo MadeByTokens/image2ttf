@@ -441,18 +441,28 @@
     const rect = canvasEl.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
-    const cellHit = getCellAt(cx, cy);
 
+    // Check row separator first
+    const sepHit = getRowSeparatorAt(cx, cy);
+    if (sepHit) {
+      contextMenu = { x: e.clientX, y: e.clientY, ...sepHit, type: 'rowSep' };
+      return;
+    }
+
+    const cellHit = getCellAt(cx, cy);
     if (cellHit) {
       contextMenu = { x: e.clientX, y: e.clientY, ...cellHit, type: 'cell' };
       selectedCell = cellHit;
       drawOverlay();
     } else {
-      // Right-click on empty area — offer "Add cell here" if inside a row
       const ri = getRowAt(cx, cy);
       if (ri >= 0) {
         const imgX = cx / displayScale;
         contextMenu = { x: e.clientX, y: e.clientY, rowIdx: ri, imgX, type: 'empty' };
+      } else {
+        // Outside any row — offer to add a row at this Y position
+        const imgY = cy / displayScale;
+        contextMenu = { x: e.clientX, y: e.clientY, imgY, type: 'noRow' };
       }
     }
   }
@@ -474,6 +484,99 @@
     appState.grid = { ...appState.grid };
     resyncCharMap();
     selectedCell = { rowIdx, colIdx: insertIdx };
+    contextMenu = null;
+    drawOverlay();
+  }
+
+  /** Add a new row by splitting an existing row at the separator boundary */
+  function addRowAtSeparator() {
+    if (!contextMenu || contextMenu.type !== 'rowSep') return;
+    const { rowIdx, boundary } = contextMenu;
+    const rows = appState.grid.rows;
+    const cells = appState.grid.cells;
+
+    // Split: insert a new row by dividing this row at its midpoint
+    const row = rows[rowIdx];
+    const midY = Math.round((row.start + row.end) / 2);
+    const newRow = { start: midY, end: row.end };
+    row.end = midY;
+
+    // Update existing cells in this row
+    for (const c of cells[rowIdx]) {
+      c.h = midY - c.y;
+    }
+
+    // Create cells for new row (copy column structure)
+    const newCells = cells[rowIdx].map(c => ({
+      x: c.x, y: midY, w: c.w, h: newRow.end - midY
+    }));
+
+    rows.splice(rowIdx + 1, 0, newRow);
+    cells.splice(rowIdx + 1, 0, newCells);
+
+    appState.grid = { ...appState.grid };
+    resyncCharMap();
+    contextMenu = null;
+    drawOverlay();
+  }
+
+  /** Delete a row and all its cells */
+  function deleteRow() {
+    if (!contextMenu) return;
+    const rowIdx = contextMenu.rowIdx;
+    const rows = appState.grid.rows;
+    const cells = appState.grid.cells;
+    if (rows.length <= 1) return; // keep at least one row
+
+    rows.splice(rowIdx, 1);
+    cells.splice(rowIdx, 1);
+
+    appState.grid = { ...appState.grid };
+    resyncCharMap();
+    contextMenu = null;
+    selectedCell = null;
+    drawOverlay();
+  }
+
+  /** Add a new row at a Y position outside existing rows */
+  function addRowAtPosition() {
+    if (!contextMenu || contextMenu.type !== 'noRow') return;
+    const imgY = contextMenu.imgY;
+    const imgH = appState.imageCanvas.height;
+    const imgW = appState.imageCanvas.width;
+    const rows = appState.grid.rows;
+    const cells = appState.grid.cells;
+
+    // Determine row height from existing rows or default
+    const avgH = rows.length > 0
+      ? rows.reduce((s, r) => s + (r.end - r.start), 0) / rows.length
+      : Math.round(imgH / 5);
+    const halfH = Math.round(avgH / 2);
+    const start = Math.max(0, Math.round(imgY - halfH));
+    const end = Math.min(imgH, start + Math.round(avgH));
+    const newRow = { start, end };
+
+    // Find insert position (sorted by Y)
+    let insertIdx = rows.findIndex(r => r.start > start);
+    if (insertIdx === -1) insertIdx = rows.length;
+
+    // Create default cells (use average column count from existing rows)
+    const avgCols = rows.length > 0
+      ? Math.round(cells.reduce((s, r) => s + r.length, 0) / cells.length)
+      : 10;
+    const colW = Math.round(imgW / avgCols);
+    const newCells = [];
+    for (let c = 0; c < avgCols; c++) {
+      const x = c * colW;
+      const w = c === avgCols - 1 ? imgW - x : colW;
+      newCells.push({ x, y: start, w, h: end - start });
+    }
+
+    rows.splice(insertIdx, 0, newRow);
+    cells.splice(insertIdx, 0, newCells);
+
+    appState.grid = { ...appState.grid };
+    resyncCharMap();
     contextMenu = null;
     drawOverlay();
   }
@@ -753,6 +856,21 @@
     {:else if contextMenu.type === 'empty'}
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addCellAtContextMenu}>
         Add cell here
+      </button>
+      <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; deleteRow(); }}>
+        Delete this row
+      </button>
+    {:else if contextMenu.type === 'rowSep'}
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowAtSeparator}>
+        Add row here
+      </button>
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteRow}>
+        Delete row
+      </button>
+    {:else if contextMenu.type === 'noRow'}
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowAtPosition}>
+        Add row here
       </button>
     {/if}
   </div>
