@@ -63,7 +63,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = newW;
     canvas.height = newH;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.translate(newW / 2, newH / 2);
     ctx.rotate(rad);
     ctx.drawImage(img, -w / 2, -h / 2);

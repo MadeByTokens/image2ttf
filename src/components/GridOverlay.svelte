@@ -13,6 +13,7 @@
   let dragState = $state(null);
   let contextMenu = $state(null);
   let showAdvanced = $state(false);
+  let computing = $state(false);
 
   // Advanced parameters (editable copies of constants)
   let darkThreshold = $state(DARK_PIXEL_THRESHOLD);
@@ -23,8 +24,10 @@
   let gapFraction = $state(MIN_GAP_FRACTION);
 
   /** Full reset: re-run auto-detection from scratch, replacing grid and labels */
-  function resetDetection() {
+  async function resetDetection() {
     if (!appState.imageCanvas) return;
+    computing = true;
+    await new Promise(r => requestAnimationFrame(r));
     try {
       const ctx = appState.imageCanvas.getContext('2d');
       const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
@@ -50,6 +53,8 @@
       drawOverlay();
     } catch (err) {
       setError('Grid detection failed: ' + err.message);
+    } finally {
+      computing = false;
     }
   }
 
@@ -61,8 +66,10 @@
   }
 
   /** Re-detect columns: keep row boundaries, use baseline midpoints as clip bounds */
-  function redetectColumns() {
+  async function redetectColumns() {
     if (!appState.grid || !appState.imageCanvas) return;
+    computing = true;
+    await new Promise(r => requestAnimationFrame(r));
     try {
       const ctx = appState.imageCanvas.getContext('2d');
       const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
@@ -108,6 +115,8 @@
       drawOverlay();
     } catch (err) {
       setError('Column detection failed: ' + err.message);
+    } finally {
+      computing = false;
     }
   }
 
@@ -1002,6 +1011,17 @@
 
   <div bind:this={containerEl} class="w-full max-w-3xl overflow-auto border rounded-lg dark:border-gray-700 relative max-h-[70vh]"
        onwheel={handleWheel}>
+    {#if computing}
+      <div class="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm">
+        <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Detecting...
+        </div>
+      </div>
+    {/if}
     <canvas
       bind:this={canvasEl}
       class="block mx-auto"

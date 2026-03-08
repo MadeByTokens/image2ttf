@@ -277,7 +277,7 @@ export function cropCell(sourceCanvas, rect) {
   const cellCanvas = typeof OffscreenCanvas !== 'undefined'
     ? new OffscreenCanvas(w, h)
     : createTempCanvas(w, h);
-  const ctx = cellCanvas.getContext('2d');
+  const ctx = cellCanvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(sourceCanvas, x, y, w, h, 0, 0, w, h);
 
   // Threshold to black & white

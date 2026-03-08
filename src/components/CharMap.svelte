@@ -3,6 +3,7 @@
   import { cropCell } from '../lib/segmentation.js';
 
   let thumbnails = $state([]);
+  let computing = $state(false);
 
   // Generate thumbnails when this step is shown
   $effect(() => {
@@ -11,7 +12,10 @@
     }
   });
 
-  function generateThumbnails() {
+  async function generateThumbnails() {
+    computing = true;
+    await new Promise(r => requestAnimationFrame(r));
+
     const cells = appState.grid.cells.flat();
     const thumbs = [];
 
@@ -40,6 +44,7 @@
     }
 
     thumbnails = thumbs;
+    computing = false;
   }
 
   function updateChar(index, newChar) {
@@ -52,6 +57,16 @@
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
     Verify each detected character is labeled correctly. Click a label to edit.
   </p>
+
+  {#if computing}
+    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-8">
+      <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      Generating thumbnails...
+    </div>
+  {/if}
 
   <div class="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-13 gap-2 w-full max-w-4xl">
     {#each thumbnails as thumb (thumb.index)}
