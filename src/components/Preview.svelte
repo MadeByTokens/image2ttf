@@ -13,7 +13,6 @@
   let fontBlobUrl = $state(null);
   let fontFamily = $state('PreviewFont');
   let fontVersion = 0;
-  let styleEl = $state(null);
   let showGlyphs = $state(false);
   let glyphEntries = $state([]);
   let selectedGlyph = $state(null);
@@ -150,13 +149,14 @@
     }
   }
 
-  function buildPreviewFont() {
+  async function buildPreviewFont() {
     if (!appState.glyphPaths || appState.glyphPaths.size === 0) return;
 
     try {
       // Use a versioned font-family name to defeat browser font caching
       fontVersion++;
-      const name = `PreviewFont${fontVersion}`;
+      const buildVersion = fontVersion;
+      const name = `PreviewFont${buildVersion}`;
       const font = createFont(appState.glyphPaths, { familyName: name });
 
       // Inject kerning into the binary kern table
@@ -170,27 +170,28 @@
       }
 
       const blob = new Blob([buffer], { type: 'font/ttf' });
+      const newUrl = URL.createObjectURL(blob);
 
-      if (fontBlobUrl) URL.revokeObjectURL(fontBlobUrl);
-      fontBlobUrl = URL.createObjectURL(blob);
-      fontFamily = name;
+      // Preload using FontFace API — only switch after font is ready
+      const face = new FontFace(name, `url(${newUrl})`);
+      await face.load();
 
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        document.head.appendChild(styleEl);
+      // If another build started while we were loading, discard this one
+      if (buildVersion !== fontVersion) {
+        URL.revokeObjectURL(newUrl);
+        return;
       }
-      styleEl.textContent = `
-        @font-face {
-          font-family: '${name}';
-          src: url('${fontBlobUrl}') format('truetype');
-          font-weight: normal;
-          font-style: normal;
-        }
-      `;
+
+      document.fonts.add(face);
+      if (fontBlobUrl) URL.revokeObjectURL(fontBlobUrl);
+      fontBlobUrl = newUrl;
+      fontFamily = name;
     } catch (err) {
       console.warn('Preview font build failed:', err);
     }
   }
+
+  let kernDebounceTimer = null;
 
   // Kerning helpers
   function addCommonPairs() {
@@ -217,7 +218,9 @@
 
   function updateKernValue(pair, value) {
     appState.kerningPairs = { ...appState.kerningPairs, [pair]: value };
-    buildPreviewFont();
+    // Debounce font rebuild to avoid flash on every slider tick
+    clearTimeout(kernDebounceTimer);
+    kernDebounceTimer = setTimeout(() => buildPreviewFont(), 250);
   }
 
   function removeKernPair(pair) {
@@ -243,7 +246,6 @@
   onMount(() => {
     return () => {
       if (fontBlobUrl) URL.revokeObjectURL(fontBlobUrl);
-      if (styleEl) styleEl.remove();
     };
   });
 
@@ -477,7 +479,7 @@
 
     <div class="w-full max-w-lg min-h-24 p-6 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 flex items-center justify-center">
       {#if fontBlobUrl}
-        <p style="font-family: '{fontFamily}', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap;"
+        <p style="font-family: '{fontFamily}', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap; font-kerning: normal; font-feature-settings: 'kern' 1;"
            class="text-gray-900 dark:text-gray-100 text-center w-full">
           {previewText}
         </p>
