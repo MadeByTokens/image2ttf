@@ -4,7 +4,7 @@
   import { createFont } from '../lib/font-builder.js';
   import { cropCell } from '../lib/segmentation.js';
   import { traceGlyph, svgPathToOpentypePath, cleanupPaths } from '../lib/tracing.js';
-  import { EM_SQUARE } from '../lib/constants.js';
+  import { EM_SQUARE, ASCENDER } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
 
   let previewText = $state('Hello World');
@@ -64,13 +64,15 @@
   }
 
   function commandsToSvgPath(commands) {
+    // Flip Y: font coords are Y-up (ascender=800), SVG is Y-down
+    const fy = (y) => ASCENDER - y;
     let d = '';
     for (const cmd of commands) {
       switch (cmd.type) {
-        case 'M': d += `M${cmd.x} ${cmd.y} `; break;
-        case 'L': d += `L${cmd.x} ${cmd.y} `; break;
-        case 'Q': d += `Q${cmd.x1} ${cmd.y1} ${cmd.x} ${cmd.y} `; break;
-        case 'C': d += `C${cmd.x1} ${cmd.y1} ${cmd.x2} ${cmd.y2} ${cmd.x} ${cmd.y} `; break;
+        case 'M': d += `M${cmd.x} ${fy(cmd.y)} `; break;
+        case 'L': d += `L${cmd.x} ${fy(cmd.y)} `; break;
+        case 'Q': d += `Q${cmd.x1} ${fy(cmd.y1)} ${cmd.x} ${fy(cmd.y)} `; break;
+        case 'C': d += `C${cmd.x1} ${fy(cmd.y1)} ${cmd.x2} ${fy(cmd.y2)} ${cmd.x} ${fy(cmd.y)} `; break;
         case 'Z': d += 'Z '; break;
       }
     }
@@ -220,7 +222,7 @@
                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'}"
             >
-              <svg viewBox="0 -200 1000 1200" class="w-10 h-10 bg-white dark:bg-gray-800 rounded">
+              <svg viewBox="-50 -50 1100 1100" class="w-10 h-10 bg-white dark:bg-gray-800 rounded">
                 <path d={entry.svgPath} fill="currentColor" class="text-gray-900 dark:text-gray-100" />
               </svg>
               <span class="text-xs font-mono text-gray-600 dark:text-gray-400">{entry.char}</span>
@@ -232,7 +234,7 @@
           {@const entry = glyphEntries.find(e => e.char === selectedGlyph)}
           {#if entry}
             <div class="mt-3 p-4 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 flex flex-col sm:flex-row gap-4 items-start">
-              <svg viewBox="0 -200 1000 1200" class="w-32 h-32 border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-700 shrink-0">
+              <svg viewBox="-50 -50 1100 1100" class="w-32 h-32 border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-700 shrink-0">
                 <path d={entry.svgPath} fill="currentColor" class="text-gray-900 dark:text-gray-100" />
               </svg>
               <div class="flex-1 min-w-0">

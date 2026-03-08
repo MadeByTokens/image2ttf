@@ -11,56 +11,51 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 ## Architecture
 
 ### Pipeline (wizard steps)
-1. **Upload** → loads image onto a canvas (`appState.imageCanvas`)
-2. **GridOverlay** → auto-detects or manually defines character cell grid
-3. **CharMap** → maps detected cells to characters
-4. **Preview** → traces glyphs, renders preview using `@font-face` blob URL
+1. **Upload** → loads image onto canvas; "Try with example" loads `public/font_test.png`
+2. **GridOverlay** → auto-detects grid; Advanced panel exposes 6 tunable params; Edit mode for manual cell manipulation
+3. **CharMap** → maps cells to characters, click labels to reassign
+4. **Preview** → traces glyphs, glyph gallery with SVG inspect/retrace/delete, live font preview via `@font-face` blob URL
 5. **Generate** → builds final TTF via opentype.js, offers download
 
 ### Key files
-- `src/lib/store.svelte.js` — global state via `appState` (not `state`, avoids `$state` naming conflict)
-- `src/lib/segmentation.js` — grid auto-detection (horizontal/vertical projection)
-- `src/lib/tracing.js` — imagetracerjs wrapper, SVG→opentype path conversion
+- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`
+- `src/lib/segmentation.js` — grid detection with `opts` param for all thresholds; valley splitting, noise filtering
+- `src/lib/tracing.js` — imagetracerjs wrapper; filters by fill color; fixes TrueType winding
 - `src/lib/font-builder.js` — `createFont()` builds opentype.Font from glyph map
-- `src/lib/constants.js` — detection thresholds, font metrics, default charset
-- `src/components/Wizard.svelte` — step navigation container
+- `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
 
 ## Commands
 
 ```bash
 npm run dev        # Start dev server
 npm run build      # Production build
-npm run test       # Run vitest (26 tests: 14 unit + 12 e2e)
+npm run test       # Run vitest (25 tests: 14 unit + 11 e2e)
 npm run deploy     # Build + publish to GitHub Pages via gh-pages
 ```
 
-## Conventions
+## Svelte 5 Rules
 
-- Event handlers in Svelte 5: use `onclick={handler}`, not `on:click`. No pipe modifiers — use `(e) => e.stopPropagation()` inline.
-- a11y: interactive non-button elements need `role`, `tabindex`, and keyboard handler.
-- Grid edits must call `resyncCharMap()` to keep `appState.charMap` aligned with cell count.
-- Store imports from `constants.js` — avoid circular dependencies with component files.
-- Tests use jsdom + `canvas` npm package; `tests/setup.js` polyfills `ImageData` and `createCanvas`.
+- `onclick={handler}`, not `on:click`. No pipe modifiers — use `(e) => e.stopPropagation()`.
+- `$derived(expr)` for simple; `$derived.by(() => { ... })` for blocks. `$derived(() => ...)` returns the function itself!
+- `$effect` tracks ALL reads in called functions. Never read+write same `$state` inside an effect. Use plain `let` for internal vars, or `untrack(() => fn())`.
+- a11y: non-button interactive elements need `role`, `tabindex`, keyboard handler.
 
 ## Testing
 
-- **Unit tests** (`tests/unit/segmentation.test.js`, `tracing.test.js`, `font-builder.test.js`) — 14 tests on synthetic shapes
-- **E2E closed-loop test** (`tests/unit/e2e-font-png.test.js`) — 12 tests using real `font.png`:
-  - Grid detection: row count, cell count, cell dimensions, no overlaps
-  - Cell cropping: verifies most cells have ink
-  - Tracing: traces all cells, checks success rate (>70%)
-  - Font round-trip: build TTF → serialize → parse back → verify all glyphs present
-  - **Visual similarity (IoU)**: renders each glyph from TTF back to bitmap, compares against original source cell. Checks per-glyph IoU >= 0.10 and average IoU >= 0.15
-- `font.png` is in `.gitignore` — e2e tests auto-skip when it's missing (CI-safe via `describe.skip`)
-- `tests/validate-font.js` — standalone script for manual TTF validation
+- **Unit tests** (14) — synthetic shapes for segmentation, tracing, font-builder
+- **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
+  - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
+  - Bbox-normalized IoU: avg ~0.71, thresholds: per-glyph ≥0.20, avg ≥0.30
+- `tests/validate-font.js` — standalone manual TTF validator
 
-## Svelte 5 Pitfalls
+## Key Gotchas
 
-- **`$derived` vs `$derived.by`**: Use `$derived(expr)` for simple expressions. Use `$derived.by(() => { ... return val; })` for multi-statement blocks. `$derived(() => ...)` returns the function itself, not its result.
-- **`$effect` infinite loops**: Effects track ALL reactive reads inside called functions. If a function both reads and writes a `$state` var, it creates `effect_update_depth_exceeded`. Fix: use plain `let` for internal-only vars, or wrap calls in `untrack(() => fn())`.
-- **`untrack()`**: Import from `'svelte'`. Use inside `$effect` to read state without adding it as a dependency.
+- **imagetracerjs** outputs paths for ALL colors. Must filter by `fill="rgb(...)"` — only keep dark fills.
+- **TrueType winding**: trapezoidal signedArea gives negative=CW in Y-up. Outer contours must be CW (area<0), inner CCW (area>0).
+- **Grid detection**: `autoDetectGrid(imageData, opts)` accepts overrides for all 6 thresholds. Valley splitting handles lined paper merging rows. Noise rows filtered by peak < 2% of width.
+- Grid edits must call `resyncCharMap()`.
 
 ## Deployment
 
 - Remote: `github.com:MadeByTokens/image2ttf.git`, branch `main`
-- GitHub Pages via `gh-pages` package targeting `dist/`
+- GitHub Pages via `gh-pages` targeting `dist/`

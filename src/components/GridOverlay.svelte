@@ -328,10 +328,39 @@
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const cellHit = getCellAt(cx, cy);
-    if (!cellHit) return;
 
-    contextMenu = { x: e.clientX, y: e.clientY, ...cellHit };
-    selectedCell = cellHit;
+    if (cellHit) {
+      contextMenu = { x: e.clientX, y: e.clientY, ...cellHit, type: 'cell' };
+      selectedCell = cellHit;
+      drawOverlay();
+    } else {
+      // Right-click on empty area — offer "Add cell here" if inside a row
+      const ri = getRowAt(cx, cy);
+      if (ri >= 0) {
+        const imgX = cx / displayScale;
+        contextMenu = { x: e.clientX, y: e.clientY, rowIdx: ri, imgX, type: 'empty' };
+      }
+    }
+  }
+
+  function addCellAtContextMenu() {
+    if (!contextMenu || contextMenu.type !== 'empty') return;
+    const { rowIdx, imgX } = contextMenu;
+    const row = appState.grid.rows[rowIdx];
+    const rowCells = appState.grid.cells[rowIdx];
+    const avgW = rowCells.length > 0
+      ? rowCells.reduce((s, c) => s + c.w, 0) / rowCells.length : 40;
+    const newCell = {
+      x: Math.max(0, imgX - avgW / 2),
+      y: row.start, w: avgW, h: row.end - row.start
+    };
+    let insertIdx = rowCells.findIndex(c => c.x > newCell.x);
+    if (insertIdx === -1) insertIdx = rowCells.length;
+    rowCells.splice(insertIdx, 0, newCell);
+    appState.grid = { ...appState.grid };
+    resyncCharMap();
+    selectedCell = { rowIdx, colIdx: insertIdx };
+    contextMenu = null;
     drawOverlay();
   }
 
@@ -364,16 +393,72 @@
     if (contextMenu) contextMenu = null;
   }
 
+  /** Get flat index for a cell given row/col indices */
+  function getFlatIndex(rowIdx, colIdx) {
+    if (!appState.grid) return -1;
+    let idx = 0;
+    for (let r = 0; r < rowIdx; r++) idx += appState.grid.cells[r].length;
+    return idx + colIdx;
+  }
+
+  /** Update the label for a single cell */
+  function updateCellLabel(rowIdx, colIdx, newChar) {
+    const idx = getFlatIndex(rowIdx, colIdx);
+    if (idx >= 0 && idx < appState.charMap.length && newChar.length === 1) {
+      appState.charMap[idx] = newChar;
+      appState.charMap = [...appState.charMap]; // trigger reactivity
+      drawOverlay();
+    }
+  }
+
+  /** Relabel from a given cell onward using DEFAULT_CHARSET starting at a given char */
+  function relabelFrom(rowIdx, colIdx, startChar) {
+    const flatIdx = getFlatIndex(rowIdx, colIdx);
+    if (flatIdx < 0) return;
+    const charsetIdx = DEFAULT_CHARSET.indexOf(startChar);
+    if (charsetIdx < 0) return;
+    for (let i = flatIdx, ci = charsetIdx; i < appState.charMap.length && ci < DEFAULT_CHARSET.length; i++, ci++) {
+      appState.charMap[i] = DEFAULT_CHARSET[ci];
+    }
+    appState.charMap = [...appState.charMap];
+    drawOverlay();
+  }
+
+  function promptRelabel() {
+    if (!contextMenu) return;
+    const { rowIdx, colIdx } = contextMenu;
+    const flatIdx = getFlatIndex(rowIdx, colIdx);
+    const currentChar = appState.charMap[flatIdx] || '?';
+    const input = prompt(
+      `Relabel from this cell onward.\nEnter the character this cell should be (current: "${currentChar}"):`,
+      currentChar
+    );
+    if (input && input.length === 1) {
+      relabelFrom(rowIdx, colIdx, input);
+    }
+    contextMenu = null;
+  }
+
+  function promptChangeLabel() {
+    if (!contextMenu) return;
+    const { rowIdx, colIdx } = contextMenu;
+    const flatIdx = getFlatIndex(rowIdx, colIdx);
+    const currentChar = appState.charMap[flatIdx] || '?';
+    const input = prompt(`Change label for this cell (current: "${currentChar}"):`, currentChar);
+    if (input && input.length === 1) {
+      updateCellLabel(rowIdx, colIdx, input);
+    }
+    contextMenu = null;
+  }
+
   const totalCells = $derived(appState.grid ? appState.grid.cells.flat().length : 0);
   const totalRows = $derived(appState.grid ? appState.grid.cells.length : 0);
   const selectedInfo = $derived.by(() => {
     if (!selectedCell || !appState.grid) return null;
     const cell = appState.grid.cells[selectedCell.rowIdx]?.[selectedCell.colIdx];
     if (!cell) return null;
-    let idx = 0;
-    for (let r = 0; r < selectedCell.rowIdx; r++) idx += appState.grid.cells[r].length;
-    idx += selectedCell.colIdx;
-    return { char: appState.charMap[idx] || '?', w: Math.round(cell.w), h: Math.round(cell.h) };
+    const idx = getFlatIndex(selectedCell.rowIdx, selectedCell.colIdx);
+    return { char: appState.charMap[idx] || '?', w: Math.round(cell.w), h: Math.round(cell.h), idx };
   });
 </script>
 
@@ -474,8 +559,23 @@
       <span>Detected {totalRows} rows, {totalCells} cells</span>
       {#if mode === 'edit' && selectedInfo}
         {@const info = selectedInfo}
-        <span class="text-indigo-500 font-medium">
-          Selected: "{info.char}" ({info.w}&times;{info.h}px)
+        <span class="text-indigo-500 font-medium inline-flex items-center gap-1">
+          Selected:
+          <input
+            type="text"
+            value={info.char}
+            maxlength="1"
+            class="w-8 text-center font-mono font-bold border border-indigo-400 rounded px-0.5 py-0
+                   dark:bg-gray-800 dark:border-indigo-500 dark:text-indigo-300
+                   focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+            oninput={(e) => {
+              if (e.target.value.length === 1) {
+                updateCellLabel(selectedCell.rowIdx, selectedCell.colIdx, e.target.value);
+              }
+            }}
+            aria-label="Edit label for selected cell"
+          />
+          ({info.w}&times;{info.h}px)
         </span>
       {/if}
     </div>
@@ -483,7 +583,7 @@
 
   {#if mode === 'edit'}
     <p class="text-xs text-gray-400 dark:text-gray-500 max-w-md text-center">
-      Click to select. Drag edges to resize. Double-click empty area to add cell. Right-click for split/delete.
+      Click to select &amp; edit label. Drag edges to resize. Double-click empty area to add cell. Right-click for more options.
     </p>
   {/if}
 
@@ -515,11 +615,24 @@
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => { if (e.key === 'Escape') contextMenu = null; }}
   >
-    <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={splitCell}>
-      Split cell
-    </button>
-    <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteCell}>
-      Delete cell
-    </button>
+    {#if contextMenu.type === 'cell'}
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={promptChangeLabel}>
+        Change label
+      </button>
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={promptRelabel}>
+        Relabel from here...
+      </button>
+      <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={splitCell}>
+        Split cell
+      </button>
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteCell}>
+        Delete cell
+      </button>
+    {:else if contextMenu.type === 'empty'}
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addCellAtContextMenu}>
+        Add cell here
+      </button>
+    {/if}
   </div>
 {/if}
