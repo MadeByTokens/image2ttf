@@ -2,11 +2,11 @@
   import { appState, setError, resyncCharMap } from '../lib/store.svelte.js';
   import { autoDetectGrid } from '../lib/segmentation.js';
   import { DEFAULT_CHARSET } from '../lib/constants.js';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   let canvasEl = $state(null);
   let containerEl = $state(null);
-  let displayScale = $state(1);
+  let displayScale = 1;
   let mode = $state('auto'); // 'auto' | 'edit'
   let selectedCell = $state(null); // { rowIdx, colIdx }
   let dragState = $state(null); // { rowIdx, colIdx, edge, startX, startY, origRect }
@@ -146,8 +146,12 @@
   }
 
   $effect(() => {
-    if (appState.grid && canvasEl) {
-      drawOverlay();
+    // Track only grid and canvas; untrack drawOverlay to avoid loops
+    // from reading selectedCell/displayScale inside it
+    const grid = appState.grid;
+    const canvas = canvasEl;
+    if (grid && canvas) {
+      untrack(() => drawOverlay());
     }
   });
 
@@ -394,7 +398,7 @@
 
   const totalCells = $derived(appState.grid ? appState.grid.cells.flat().length : 0);
   const totalRows = $derived(appState.grid ? appState.grid.cells.length : 0);
-  const selectedInfo = $derived(() => {
+  const selectedInfo = $derived.by(() => {
     if (!selectedCell || !appState.grid) return null;
     const cell = appState.grid.cells[selectedCell.rowIdx]?.[selectedCell.colIdx];
     if (!cell) return null;
@@ -456,8 +460,8 @@
   {#if appState.grid}
     <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
       <span>Detected {totalRows} rows, {totalCells} cells</span>
-      {#if mode === 'edit' && selectedInfo()}
-        {@const info = selectedInfo()}
+      {#if mode === 'edit' && selectedInfo}
+        {@const info = selectedInfo}
         <span class="text-indigo-500 font-medium">
           Selected: "{info.char}" ({info.w}&times;{info.h}px)
         </span>

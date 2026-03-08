@@ -83,13 +83,6 @@
     }
   });
 
-  // Rebuild preview font when glyphPaths changes after initial trace
-  $effect(() => {
-    if (traced && appState.glyphPaths) {
-      buildPreviewFont();
-    }
-  });
-
   // Cleanup on unmount
   onMount(() => {
     return () => {
