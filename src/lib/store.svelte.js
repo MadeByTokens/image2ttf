@@ -9,6 +9,8 @@ export const appState = $state({
   charMap: [],               // flat array of characters
   glyphPaths: null,          // Map<string, {commands, width}>
   spaceWidthPercent: 60,     // space width as % of avg lowercase width (0 = auto)
+  smoothness: 5,             // 1 = precise, 10 = very smooth curves
+  kerningPairs: {},           // e.g. { "AV": -80, "To": -40 }
   fontName: 'MyHandwriting',
   generatedFont: null,       // opentype.Font object
   isProcessing: false,

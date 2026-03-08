@@ -1,5 +1,5 @@
 import { cropCell } from './segmentation.js';
-import { traceGlyph, svgPathToOpentypePath, cleanupPaths } from './tracing.js';
+import { traceGlyph, svgPathToOpentypePath, cleanupPaths, smoothnessToOpts } from './tracing.js';
 import { EM_SQUARE } from './constants.js';
 
 /**
@@ -32,7 +32,8 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
         continue;
       }
 
-      const svgPaths = traceGlyph(cropped.imageData);
+      const tracingOpts = opts.smoothness != null ? smoothnessToOpts(opts.smoothness) : {};
+      const svgPaths = traceGlyph(cropped.imageData, tracingOpts);
 
       if (svgPaths.length === 0) continue;
 

@@ -29,7 +29,8 @@
   function download() {
     if (!appState.generatedFont) return;
     const filename = (appState.fontName || 'handwriting').replace(/[^a-zA-Z0-9_-]/g, '_') + '.ttf';
-    downloadFont(appState.generatedFont, filename);
+    const kerning = Object.keys(appState.kerningPairs).length > 0 ? appState.kerningPairs : null;
+    downloadFont(appState.generatedFont, filename, kerning);
   }
 
   const glyphCount = $derived(appState.glyphPaths ? appState.glyphPaths.size : 0);

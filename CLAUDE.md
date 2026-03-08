@@ -14,15 +14,15 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 1. **Upload** → loads image; pan/rotate/zoom viewer (mode-based: Pan/Rotate/Zoom toggle); rotation applied to canvas data
 2. **Detect** (GridOverlay) → auto-detects grid; Advanced panel (6 params); Edit mode: drag cell edges, drag orange row separators, right-click for cell/row operations (add/delete/split/relabel)
 3. **Characters** (CharMap) → maps cells to chars; editable labels; space width slider (20-150% of avg lowercase)
-4. **Preview** → traces glyphs, glyph gallery with SVG inspect/retrace/delete, live font preview via `@font-face` blob URL
-5. **Generate** → builds final TTF via opentype.js, offers download
+4. **Preview** → traces glyphs (smoothness slider 1-10), glyph gallery with SVG inspect/retrace/delete, kerning pair editor, live font preview via `@font-face` blob URL with kern table
+5. **Generate** → builds final TTF via opentype.js with kern table injection, offers download
 
 ### Key files
-- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent` for configurable space width.
+- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value).
 - `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
-- `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`
-- `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`
-- `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; reads space width from glyphMap
+- `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`; exports `smoothnessToOpts(1-10)` for mapping slider to imagetracerjs params
+- `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `smoothness`
+- `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; `injectKernTable(buffer, pairs)` manually builds kern table binary; `downloadFont(font, filename, kerningMap)` with kern support
 - `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
 
 ## Commands
@@ -58,13 +58,16 @@ npm run deploy     # Build + publish to GitHub Pages via gh-pages
 ## Key Gotchas
 
 - **imagetracerjs** outputs paths for ALL colors. Must filter by `fill="rgb(...)"` — only keep dark fills.
-- **TrueType winding**: trapezoidal signedArea gives negative=CW in Y-up. Outer contours must be CW (area<0), inner CCW (area>0).
+- **TrueType winding**: trapezoidal signedArea gives negative=CW in Y-up. Outer contours must be CW (area<0), inner CCW (area>0). `fixWinding` uses point-in-polygon containment test to handle multi-component glyphs (i, j, !, :, %).
 - **Grid detection**: `autoDetectGrid(imageData, opts)` accepts overrides for all 6 thresholds. Valley splitting handles lined paper. `detectColumns` can be re-run independently to keep row boundaries.
 - Grid edits must call `resyncCharMap()`. GridOverlay preserves edits on re-mount (only resets when user clicks Reset).
 - **Glyph scaling**: Uses single `refHeight = max(all cell heights)` across entire grid for uniform scaling. All rows share the same scale factor so uppercase/lowercase align on same baseline.
 - **SVG Y-flip for glyph gallery**: Font coords Y-up, SVG Y-down. `commandsToSvgPath` in Preview.svelte flips Y via `ASCENDER - y`.
 - **Space glyph**: Auto-generated in pipeline.js from avg lowercase width × `spaceWidthPercent`. Configurable via slider in CharMap.
 - **Version**: Injected from package.json via Vite `define` (`__APP_VERSION__`), displayed in footer.
+- **Kerning**: opentype.js cannot write kern/GPOS tables. `injectKernTable` manually builds kern table binary and splices it into the SFNT structure. Pairs use glyph indices, sorted by `(left << 16) | right`.
+- **Smoothness**: `smoothnessToOpts(1-10)` maps slider to imagetracerjs params (`ltres`, `qtres`, `rightangleenhance`, `blurradius`, `pathomit`). Threaded through pipeline.js and Preview retrace.
+- **.notdef winding**: Outer CW, inner CCW in Y-up. Previously was backwards causing some renderers to misinterpret font conventions.
 
 ## Deployment
 

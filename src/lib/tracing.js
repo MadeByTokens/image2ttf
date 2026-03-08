@@ -2,6 +2,26 @@ import ImageTracer from 'imagetracerjs';
 import { EM_SQUARE } from './constants.js';
 
 /**
+ * Map a smoothness value (1-10) to imagetracerjs tracing options.
+ * 1 = precise/detailed (many segments), 10 = very smooth (flowing curves)
+ */
+export function smoothnessToOpts(smoothness = 5) {
+  const s = Math.max(1, Math.min(10, smoothness));
+  const t = (s - 1) / 9; // 0..1
+  // ltres: 2.0 → 0.01 (lower = more curves instead of lines)
+  const ltres = Math.round((2.0 * Math.pow(0.005, t)) * 1000) / 1000;
+  // qtres: 2.0 → 0.5 (keep curves reasonably precise)
+  const qtres = Math.round((2.0 * Math.pow(0.25, t)) * 1000) / 1000;
+  return {
+    ltres,
+    qtres,
+    rightangleenhance: s < 7,
+    blurradius: s >= 9 ? s - 7 : 0,
+    pathomit: Math.round(8 - t * 6),
+  };
+}
+
+/**
  * Trace a black-and-white ImageData into SVG path strings
  * Returns an array of SVG path data strings (d attributes)
  */
@@ -266,14 +286,48 @@ function signedArea(commands) {
 }
 
 /**
+ * Ray-casting point-in-polygon test
+ */
+function pointInContour(px, py, contour) {
+  let inside = false;
+  let prevX = 0, prevY = 0, startX = 0, startY = 0;
+
+  for (const cmd of contour) {
+    if (cmd.type === 'M') {
+      startX = cmd.x; startY = cmd.y;
+      prevX = cmd.x; prevY = cmd.y;
+      continue;
+    }
+
+    let testX, testY;
+    if (cmd.type === 'Z') {
+      testX = startX; testY = startY;
+    } else {
+      testX = cmd.x; testY = cmd.y;
+    }
+
+    if ((prevY > py) !== (testY > py)) {
+      const ix = prevX + (py - prevY) / (testY - prevY) * (testX - prevX);
+      if (px < ix) inside = !inside;
+    }
+
+    if (cmd.type !== 'Z') { prevX = testX; prevY = testY; }
+    else { prevX = startX; prevY = startY; }
+  }
+  return inside;
+}
+
+/**
  * Split commands into individual contours and fix winding direction
  *
  * TrueType convention (Y-up coordinate system):
  *   - Outer contours: clockwise → signedArea < 0 (trapezoidal formula)
  *   - Inner contours (holes): counter-clockwise → signedArea > 0
+ *
+ * Uses point-in-polygon containment to handle glyphs with multiple
+ * disconnected ink regions (i, j, !, :, %, etc.)
  */
 function fixWinding(commands) {
-  // Split into contours
   const contours = [];
   let current = [];
 
@@ -285,25 +339,32 @@ function fixWinding(commands) {
     }
   }
   if (current.length > 0) contours.push(current);
-
   if (contours.length === 0) return commands;
 
-  // Compute area for each contour and sort by absolute area (largest = outer)
+  // Compute area for each contour, sort by absolute area descending
   const contourData = contours.map(c => ({ contour: c, area: signedArea(c) }));
   contourData.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
 
-  // Largest contour = outer → must be clockwise (area < 0 in Y-up trapezoidal formula)
-  // Smaller contours = inner holes → must be counter-clockwise (area > 0)
+  // Determine nesting depth via point-in-polygon containment
+  // Even depth = outer (CW, area < 0), odd depth = hole (CCW, area > 0)
   const fixed = [];
   for (let i = 0; i < contourData.length; i++) {
     const { contour, area } = contourData[i];
-    const isOuter = i === 0;
+    const firstPt = contour.find(c => c.type === 'M');
+    if (!firstPt) { fixed.push(...contour); continue; }
 
-    if (isOuter && area > 0) {
-      // Outer contour is CCW — reverse to CW
-      fixed.push(...reverseContour(contour));
-    } else if (!isOuter && area < 0) {
-      // Inner contour is CW — reverse to CCW
+    // Count how many larger contours contain this one
+    let depth = 0;
+    for (let j = 0; j < i; j++) {
+      if (pointInContour(firstPt.x, firstPt.y, contourData[j].contour)) {
+        depth++;
+      }
+    }
+
+    const shouldBeCW = depth % 2 === 0; // outer = CW (area < 0)
+    const isCW = area < 0;
+
+    if (shouldBeCW !== isCW) {
       fixed.push(...reverseContour(contour));
     } else {
       fixed.push(...contour);
