@@ -1,9 +1,9 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
-  import { runTracing } from '../lib/pipeline.js';
   import { createFont, injectKernTable, buildKernPairs } from '../lib/font-builder.js';
   import { cropCell } from '../lib/segmentation.js';
   import { traceGlyph, svgPathToOpentypePath, cleanupPaths, smoothnessToOpts } from '../lib/tracing.js';
+  import { runTracingAsync, abortCompute } from '../lib/compute.js';
   import { EM_SQUARE, ASCENDER } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
 
@@ -40,17 +40,17 @@
     appState.progress = 0;
 
     try {
-      const glyphMap = await runTracing(
+      const glyphMap = await runTracingAsync(
+        appState.imageCanvas,
         appState.grid.cells,
         appState.charMap,
-        appState.imageCanvas,
-        (current, total) => {
-          appState.progress = current;
-          appState.progressTotal = total;
-        },
         {
           spaceWidthPercent: appState.spaceWidthPercent,
           smoothness: appState.smoothness
+        },
+        (current, total) => {
+          appState.progress = current;
+          appState.progressTotal = total;
         }
       );
 
@@ -59,6 +59,7 @@
       buildGlyphEntries();
       buildPreviewFont();
     } catch (err) {
+      if (err.message === 'Aborted') return;
       setError('Tracing failed: ' + err.message);
     } finally {
       tracing = false;
@@ -267,6 +268,11 @@
           style="width: {appState.progressTotal > 0 ? (appState.progress / appState.progressTotal * 100) : 0}%"
         ></div>
       </div>
+      <button
+        onclick={() => { abortCompute(); tracing = false; appState.isProcessing = false; }}
+        class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
+               text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+      >Cancel</button>
     </div>
   {:else if traced}
     <div class="flex flex-wrap items-center gap-3">

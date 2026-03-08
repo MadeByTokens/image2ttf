@@ -1,6 +1,6 @@
 <script>
   import { appState, setError, resyncCharMap } from '../lib/store.svelte.js';
-  import { autoDetectGrid, detectColumns } from '../lib/segmentation.js';
+  import { detectGridAsync, redetectColumnsAsync, abortCompute } from '../lib/compute.js';
   import { DEFAULT_CHARSET, DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
 
@@ -27,11 +27,8 @@
   async function resetDetection() {
     if (!appState.imageCanvas) return;
     computing = true;
-    await new Promise(r => requestAnimationFrame(r));
     try {
-      const ctx = appState.imageCanvas.getContext('2d');
-      const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
-      const grid = autoDetectGrid(imageData, {
+      const grid = await detectGridAsync(appState.imageCanvas, {
         darkPixelThreshold: darkThreshold,
         rowDensityThreshold: rowDensity,
         colDensityThreshold: colDensity,
@@ -52,6 +49,7 @@
       contextMenu = null;
       drawOverlay();
     } catch (err) {
+      if (err.message === 'Aborted') return;
       setError('Grid detection failed: ' + err.message);
     } finally {
       computing = false;
@@ -69,51 +67,21 @@
   async function redetectColumns() {
     if (!appState.grid || !appState.imageCanvas) return;
     computing = true;
-    await new Promise(r => requestAnimationFrame(r));
     try {
-      const ctx = appState.imageCanvas.getContext('2d');
-      const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
-      const opts = {
+      const result = await redetectColumnsAsync(appState.imageCanvas, appState.grid.rows, {
         darkPixelThreshold: darkThreshold,
         colDensityThreshold: colDensity,
         minColWidth: minColW,
         minGapFraction: gapFraction
-      };
+      });
 
-      const rows = appState.grid.rows;
-      const newCells = [];
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        // Ensure baseline exists
-        if (row.baseline == null) {
-          row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
-        }
-        // Use baseline midpoints as clip bounds for column detection
-        const clipTop = i > 0
-          ? Math.round((rows[i - 1].baseline + row.baseline) / 2)
-          : row.start;
-        const clipBottom = i < rows.length - 1
-          ? Math.round((row.baseline + rows[i + 1].baseline) / 2)
-          : row.end;
-
-        const clipBound = { start: clipTop, end: clipBottom };
-        const cols = detectColumns(imageData, clipBound, opts);
-        const rowCells = cols.map(col => ({
-          x: col.start,
-          y: row.start,
-          w: col.end - col.start,
-          h: row.end - row.start,
-          baseline: row.baseline
-        }));
-        newCells.push(rowCells);
-      }
-
-      appState.grid = { rows, cells: newCells };
+      appState.grid = result;
       resyncCharMap();
       selectedCell = null;
       contextMenu = null;
       drawOverlay();
     } catch (err) {
+      if (err.message === 'Aborted') return;
       setError('Column detection failed: ' + err.message);
     } finally {
       computing = false;
@@ -1013,12 +981,19 @@
        onwheel={handleWheel}>
     {#if computing}
       <div class="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm">
-        <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-          <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-          </svg>
-          Detecting...
+        <div class="flex flex-col items-center gap-2">
+          <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Detecting...
+          </div>
+          <button
+            onclick={() => { abortCompute(); computing = false; }}
+            class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
+                   text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >Cancel</button>
         </div>
       </div>
     {/if}

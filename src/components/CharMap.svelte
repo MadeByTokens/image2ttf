@@ -1,9 +1,10 @@
 <script>
   import { appState } from '../lib/store.svelte.js';
-  import { cropCell } from '../lib/segmentation.js';
+  import { generateThumbnailsAsync, abortCompute } from '../lib/compute.js';
 
   let thumbnails = $state([]);
   let computing = $state(false);
+  let progress = $state({ current: 0, total: 0 });
 
   // Generate thumbnails when this step is shown
   $effect(() => {
@@ -14,37 +15,42 @@
 
   async function generateThumbnails() {
     computing = true;
-    await new Promise(r => requestAnimationFrame(r));
+    progress = { current: 0, total: 0 };
 
-    const cells = appState.grid.cells.flat();
-    const thumbs = [];
+    try {
+      const rawThumbs = await generateThumbnailsAsync(
+        appState.imageCanvas,
+        appState.grid.cells,
+        appState.charMap,
+        (current, total) => { progress = { current, total }; }
+      );
 
-    for (let i = 0; i < cells.length && i < appState.charMap.length; i++) {
-      try {
-        const cropped = cropCell(appState.imageCanvas, cells[i]);
-        // Convert to data URL for display
+      // Convert ImageData to data URLs on main thread (fast)
+      const thumbs = [];
+      for (const thumb of rawThumbs) {
         let dataUrl = '';
-        if (!cropped.empty) {
+        if (!thumb.empty && thumb.imageData) {
           const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = cropped.imageData.width;
-          tempCanvas.height = cropped.imageData.height;
+          tempCanvas.width = thumb.imageData.width;
+          tempCanvas.height = thumb.imageData.height;
           const ctx = tempCanvas.getContext('2d');
-          ctx.putImageData(cropped.imageData, 0, 0);
+          ctx.putImageData(thumb.imageData, 0, 0);
           dataUrl = tempCanvas.toDataURL();
         }
         thumbs.push({
-          char: appState.charMap[i],
+          char: thumb.char,
           dataUrl,
-          empty: cropped.empty,
-          index: i
+          empty: thumb.empty,
+          index: thumb.index
         });
-      } catch {
-        thumbs.push({ char: appState.charMap[i], dataUrl: '', empty: true, index: i });
       }
+      thumbnails = thumbs;
+    } catch (err) {
+      if (err.message === 'Aborted') return;
+      console.warn('Thumbnail generation failed:', err);
+    } finally {
+      computing = false;
     }
-
-    thumbnails = thumbs;
-    computing = false;
   }
 
   function updateChar(index, newChar) {
@@ -59,12 +65,28 @@
   </p>
 
   {#if computing}
-    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-8">
-      <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-      </svg>
-      Generating thumbnails...
+    <div class="flex flex-col items-center gap-2 py-8">
+      <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <svg class="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Generating thumbnails...
+        {#if progress.total > 0}
+          <span class="text-xs">{progress.current}/{progress.total}</span>
+        {/if}
+      </div>
+      {#if progress.total > 0}
+        <div class="w-48 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div class="h-full bg-indigo-500 rounded-full transition-all"
+               style="width: {progress.current / progress.total * 100}%"></div>
+        </div>
+      {/if}
+      <button
+        onclick={() => { abortCompute(); computing = false; }}
+        class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
+               text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+      >Cancel</button>
     </div>
   {/if}
 
@@ -111,7 +133,7 @@
     </p>
   </div>
 
-  {#if thumbnails.length === 0}
+  {#if thumbnails.length === 0 && !computing}
     <p class="text-amber-600 dark:text-amber-400 text-sm">
       No cells detected. Go back and check the grid.
     </p>

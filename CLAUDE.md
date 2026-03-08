@@ -24,6 +24,8 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 - `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `smoothness`
 - `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; `injectKernTable(buffer, pairs)` manually builds kern table binary; `downloadFont(font, filename, kerningMap)` with kern support
 - `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
+- `src/lib/compute-worker.js` — Web Worker for heavy computation (grid detect, thumbnails, tracing)
+- `src/lib/compute.js` — async API wrapping the worker with abort support and main-thread fallback
 
 ## Commands
 
