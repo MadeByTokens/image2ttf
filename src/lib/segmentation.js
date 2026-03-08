@@ -220,19 +220,41 @@ export function detectColumns(imageData, rowBound, opts = {}) {
 
 /**
  * Auto-detect the full grid of character cells
- * Returns { rows: [{start, end}], cells: [[{x, y, w, h}]] }
+ * Returns { rows: [{start, end, baseline}], cells: [[{x, y, w, h}]] }
+ *
+ * Each row gets a baseline (where characters "sit"), computed as ~75% down
+ * from the row top. Column detection uses baseline midpoints as clip bounds
+ * to avoid false positives from descenders/ascenders overlapping into
+ * adjacent rows.
  */
 export function autoDetectGrid(imageData, opts = {}) {
   const rows = detectRows(imageData, opts);
-  const cells = [];
 
+  // Add baselines to rows (~75% down from top, leaving room for descenders)
   for (const row of rows) {
-    const cols = detectColumns(imageData, row, opts);
+    row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
+  }
+
+  // Compute clip bounds for column detection using baseline midpoints
+  const cells = [];
+  for (let i = 0; i < rows.length; i++) {
+    const clipTop = i > 0
+      ? Math.round((rows[i - 1].baseline + rows[i].baseline) / 2)
+      : rows[i].start;
+    const clipBottom = i < rows.length - 1
+      ? Math.round((rows[i].baseline + rows[i + 1].baseline) / 2)
+      : rows[i].end;
+
+    // Detect columns using clipped bounds (avoids overlap interference)
+    const clipBound = { start: clipTop, end: clipBottom };
+    const cols = detectColumns(imageData, clipBound, opts);
+
+    // But cell bboxes use the full row extent
     const rowCells = cols.map(col => ({
       x: col.start,
-      y: row.start,
+      y: rows[i].start,
       w: col.end - col.start,
-      h: row.end - row.start
+      h: rows[i].end - rows[i].start
     }));
     cells.push(rowCells);
   }

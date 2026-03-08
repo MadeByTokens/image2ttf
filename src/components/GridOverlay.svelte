@@ -60,7 +60,7 @@
     drawOverlay();
   }
 
-  /** Re-detect columns: keep row boundaries, re-run column detection within each row */
+  /** Re-detect columns: keep row boundaries, use baseline midpoints as clip bounds */
   function redetectColumns() {
     if (!appState.grid || !appState.imageCanvas) return;
     try {
@@ -75,8 +75,22 @@
 
       const rows = appState.grid.rows;
       const newCells = [];
-      for (const row of rows) {
-        const cols = detectColumns(imageData, row, opts);
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        // Ensure baseline exists
+        if (row.baseline == null) {
+          row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
+        }
+        // Use baseline midpoints as clip bounds for column detection
+        const clipTop = i > 0
+          ? Math.round((rows[i - 1].baseline + row.baseline) / 2)
+          : row.start;
+        const clipBottom = i < rows.length - 1
+          ? Math.round((row.baseline + rows[i + 1].baseline) / 2)
+          : row.end;
+
+        const clipBound = { start: clipTop, end: clipBottom };
+        const cols = detectColumns(imageData, clipBound, opts);
         const rowCells = cols.map(col => ({
           x: col.start,
           y: row.start,
@@ -205,12 +219,12 @@
       }
     }
 
-    // Draw row bands and separators in edit mode
+    // Draw row bands, baselines, and boundaries in edit mode
     if (mode === 'edit' && cells.length > 0) {
       const rows = appState.grid.rows;
       const rowColors = [
-        { line: 'rgba(234, 88, 12, 0.85)', fill: 'rgba(234, 88, 12, 0.06)' },  // orange
-        { line: 'rgba(6, 182, 212, 0.85)', fill: 'rgba(6, 182, 212, 0.06)' },   // teal
+        { line: 'rgba(234, 88, 12, 0.5)', base: 'rgba(234, 88, 12, 1)', fill: 'rgba(234, 88, 12, 0.06)' },
+        { line: 'rgba(6, 182, 212, 0.5)', base: 'rgba(6, 182, 212, 1)', fill: 'rgba(6, 182, 212, 0.06)' },
       ];
 
       // Draw row band shading
@@ -227,7 +241,6 @@
       for (let ri = 0; ri < rows.length - 1; ri++) {
         const gap = rows[ri + 1].start - rows[ri].end;
         if (gap < 0) {
-          // Overlap: row[ri].end > row[ri+1].start
           const overlapTop = rows[ri + 1].start * displayScale;
           const overlapBot = rows[ri].end * displayScale;
           ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
@@ -235,33 +248,40 @@
         }
       }
 
-      // Draw boundary lines — each row has its own top and bottom
+      // Draw top/bottom boundaries as subtle dashed lines
       ctx.save();
-      ctx.setLineDash([6, 4]);
-      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 6]);
+      ctx.lineWidth = 1;
       for (let ri = 0; ri < rows.length; ri++) {
         const row = rows[ri];
         const color = rowColors[ri % 2];
         ctx.strokeStyle = color.line;
 
-        // Top boundary
         const yTop = row.start * displayScale;
-        ctx.beginPath();
-        ctx.moveTo(0, yTop);
-        ctx.lineTo(canvasEl.width, yTop);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, yTop); ctx.lineTo(canvasEl.width, yTop); ctx.stroke();
 
-        // Bottom boundary
         const yBot = row.end * displayScale;
-        ctx.beginPath();
-        ctx.moveTo(0, yBot);
-        ctx.lineTo(canvasEl.width, yBot);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, yBot); ctx.lineTo(canvasEl.width, yBot); ctx.stroke();
+      }
+      ctx.restore();
 
-        // Row label
-        ctx.fillStyle = color.line;
-        ctx.font = `${Math.max(9, 10 * displayScale)}px sans-serif`;
-        ctx.fillText(`R${ri + 1}`, 3, yTop + 12 * displayScale);
+      // Draw baselines as prominent solid lines (where characters sit)
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 2.5;
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const color = rowColors[ri % 2];
+        const baseline = row.baseline ?? Math.round(row.start + (row.end - row.start) * 0.75);
+        const yBase = baseline * displayScale;
+
+        ctx.strokeStyle = color.base;
+        ctx.beginPath(); ctx.moveTo(0, yBase); ctx.lineTo(canvasEl.width, yBase); ctx.stroke();
+
+        // Row label near baseline
+        ctx.fillStyle = color.base;
+        ctx.font = `bold ${Math.max(9, 10 * displayScale)}px sans-serif`;
+        ctx.fillText(`R${ri + 1}`, 3, yBase - 4);
       }
       ctx.restore();
     }
@@ -307,12 +327,20 @@
     const imgY = canvasY / displayScale;
     const hitZone = 8 / displayScale;
     const rows = appState.grid.rows;
-    // Check bottom boundaries first (so bottom of row N takes priority over top of row N+1 when they're close)
+    // Check baselines first (highest priority — the main draggable lines)
+    for (let ri = 0; ri < rows.length; ri++) {
+      const baseline = rows[ri].baseline ?? Math.round(rows[ri].start + (rows[ri].end - rows[ri].start) * 0.75);
+      if (Math.abs(imgY - baseline) < hitZone) {
+        return { rowIdx: ri, boundary: 'baseline' };
+      }
+    }
+    // Then bottom boundaries
     for (let ri = 0; ri < rows.length; ri++) {
       if (Math.abs(imgY - rows[ri].end) < hitZone) {
         return { rowIdx: ri, boundary: 'bottom' };
       }
     }
+    // Then top boundaries
     for (let ri = 0; ri < rows.length; ri++) {
       if (Math.abs(imgY - rows[ri].start) < hitZone) {
         return { rowIdx: ri, boundary: 'top' };
@@ -373,11 +401,15 @@
     const sepHit = getRowSeparatorAt(cx, cy);
     if (sepHit) {
       const rows = appState.grid.rows;
+      const row = rows[sepHit.rowIdx];
+      const origY = sepHit.boundary === 'top' ? row.start
+        : sepHit.boundary === 'bottom' ? row.end
+        : (row.baseline ?? Math.round(row.start + (row.end - row.start) * 0.75));
       dragState = {
         type: 'rowSep',
         ...sepHit,
         startY: cy,
-        origY: sepHit.boundary === 'top' ? rows[sepHit.rowIdx].start : rows[sepHit.rowIdx].end
+        origY
       };
       e.preventDefault();
       return;
@@ -410,28 +442,26 @@
 
     if (dragState) {
       if (dragState.type === 'rowSep') {
-        // Dragging a row separator — each row is independent
         const dy = (cy - dragState.startY) / displayScale;
         const newY = Math.max(0, dragState.origY + dy);
         const { rowIdx, boundary } = dragState;
         const rows = appState.grid.rows;
-        const cells = appState.grid.cells;
 
-        if (boundary === 'top') {
-          const maxY = rows[rowIdx].end - 10;
-          const clampedY = Math.max(0, Math.min(maxY, newY));
+        if (boundary === 'baseline') {
+          // Drag baseline — only moves the baseline, not cell bboxes
+          const minY = rows[rowIdx].start + 5;
+          const maxY = rows[rowIdx].end - 5;
+          rows[rowIdx].baseline = Math.round(Math.max(minY, Math.min(maxY, newY)));
+        } else if (boundary === 'top') {
+          // Drag row top — does NOT move cell bboxes (they're independent)
+          const bl = rows[rowIdx].baseline ?? rows[rowIdx].end;
+          const clampedY = Math.max(0, Math.min(bl - 5, newY));
           rows[rowIdx].start = clampedY;
-          for (const c of cells[rowIdx]) {
-            c.y = clampedY;
-            c.h = rows[rowIdx].end - clampedY;
-          }
         } else {
-          const minY = rows[rowIdx].start + 10;
-          const clampedY = Math.max(minY, newY);
+          // Drag row bottom — does NOT move cell bboxes (they're independent)
+          const bl = rows[rowIdx].baseline ?? rows[rowIdx].start;
+          const clampedY = Math.max(bl + 5, newY);
           rows[rowIdx].end = clampedY;
-          for (const c of cells[rowIdx]) {
-            c.h = clampedY - c.y;
-          }
         }
         drawOverlay();
         return;
@@ -569,8 +599,9 @@
     // Split: insert a new row by dividing this row at its midpoint
     const row = rows[rowIdx];
     const midY = Math.round((row.start + row.end) / 2);
-    const newRow = { start: midY, end: row.end };
+    const newRow = { start: midY, end: row.end, baseline: Math.round(midY + (row.end - midY) * 0.75) };
     row.end = midY;
+    row.baseline = Math.round(row.start + (midY - row.start) * 0.75);
 
     // Update existing cells in this row
     for (const c of cells[rowIdx]) {
@@ -668,7 +699,7 @@
     const halfH = Math.round(avgH / 2);
     const start = Math.max(0, Math.round(imgY - halfH));
     const end = Math.min(imgH, start + Math.round(avgH));
-    const newRow = { start, end };
+    const newRow = { start, end, baseline: Math.round(start + (end - start) * 0.75) };
 
     // Find insert position (sorted by Y)
     let insertIdx = rows.findIndex(r => r.start > start);
@@ -927,7 +958,7 @@
 
   {#if mode === 'edit'}
     <p class="text-xs text-gray-400 dark:text-gray-500 max-w-md text-center">
-      Click to select &amp; edit label. Drag cell edges to resize. Drag orange row lines to adjust row boundaries. Double-click to add cell. Right-click for more.
+      Drag the solid baseline to set where characters sit. Drag dashed lines to adjust row bounds. Drag cell edges to resize individually. Double-click to add cell. Right-click for more.
     </p>
   {/if}
 
