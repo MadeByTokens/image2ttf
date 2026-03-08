@@ -244,7 +244,11 @@ export function autoDetectGrid(imageData, opts = {}) {
  * Crop a single cell from a canvas, threshold to B&W, and trim whitespace
  */
 export function cropCell(sourceCanvas, rect) {
-  const { x, y, w, h } = rect;
+  // Round coordinates to integers to avoid anti-aliasing artifacts
+  const x = Math.round(rect.x);
+  const y = Math.round(rect.y);
+  const w = Math.max(1, Math.round(rect.w));
+  const h = Math.max(1, Math.round(rect.h));
 
   // Extract the cell region
   const cellCanvas = typeof OffscreenCanvas !== 'undefined'
@@ -254,6 +258,10 @@ export function cropCell(sourceCanvas, rect) {
   ctx.drawImage(sourceCanvas, x, y, w, h, 0, 0, w, h);
 
   // Threshold to black & white
+  // Use a more lenient threshold than grid detection (which needs to
+  // ignore noise) — here we want to capture light ink like pencil strokes
+  // and thin characters like apostrophes, commas, periods
+  const cropThreshold = Math.min(200, Math.round(DARK_PIXEL_THRESHOLD * 1.6));
   const imageData = ctx.getImageData(0, 0, w, h);
   const { data } = imageData;
 
@@ -264,7 +272,7 @@ export function cropCell(sourceCanvas, rect) {
     for (let px = 0; px < w; px++) {
       const idx = (py * w + px) * 4;
       const gray = getGray(data, idx);
-      if (gray < DARK_PIXEL_THRESHOLD) {
+      if (gray < cropThreshold) {
         // Dark pixel — make pure black
         data[idx] = 0;
         data[idx + 1] = 0;
