@@ -233,6 +233,7 @@
   $effect(() => {
     const grid = appState.grid;
     const canvas = canvasEl;
+    const _mode = mode; // track mode changes to redraw row separators
     if (grid && canvas) {
       untrack(() => drawOverlay());
     }
@@ -761,7 +762,7 @@
 <svelte:window onmouseup={handleCanvasMouseUp} onclick={handleWindowClick} />
 
 <div class="flex flex-col items-center gap-4">
-  <h2 class="text-2xl font-bold">Adjust Grid</h2>
+  <h2 class="text-2xl font-bold">Detect</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
     The grid was auto-detected. Verify that each character is in its own box.
   </p>
@@ -852,9 +853,9 @@
       </div>
       <div class="flex gap-2 mt-3">
         <button
-          onclick={resetDetection}
+          onclick={redetectColumns}
           class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >Apply & Reset</button>
+        >Apply</button>
         <button
           onclick={() => { darkThreshold = DARK_PIXEL_THRESHOLD; rowDensity = ROW_DENSITY_THRESHOLD; colDensity = COL_DENSITY_THRESHOLD; minRowH = MIN_ROW_HEIGHT; minColW = MIN_COL_WIDTH; gapFraction = MIN_GAP_FRACTION; }}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
