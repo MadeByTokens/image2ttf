@@ -68,18 +68,37 @@ function parseSVGPath(d) {
 /**
  * Convert SVG path data to opentype.js Path commands
  * Scales and flips Y axis to match font coordinate system
+ *
+ * @param {string|string[]} svgPathData - SVG path d-attribute(s)
+ * @param {number} sourceWidth - width of the (trimmed) glyph image
+ * @param {number} sourceHeight - height of the (trimmed) glyph image
+ * @param {number} emSquare - em square size
+ * @param {object} [metrics] - optional cell metrics for uniform scaling
+ * @param {number} [metrics.cellHeight] - original cell height (row height) for uniform scale
+ * @param {number} [metrics.trimOffsetY] - Y offset of trimmed region within the cell
  */
-export function svgPathToOpentypePath(svgPathData, sourceWidth, sourceHeight, emSquare = EM_SQUARE) {
+export function svgPathToOpentypePath(svgPathData, sourceWidth, sourceHeight, emSquare = EM_SQUARE, metrics = {}) {
+  const { cellHeight, trimOffsetY = 0 } = metrics;
   const commands = [];
-  const scale = emSquare / Math.max(sourceWidth, sourceHeight);
+
+  // When cellHeight is provided, scale uniformly based on cell height
+  // so all characters in a row preserve their relative sizes
+  const refSize = cellHeight || Math.max(sourceWidth, sourceHeight);
+  const scale = emSquare / refSize;
+
   // Center horizontally
-  const offsetX = (emSquare - sourceWidth * scale) / 2;
+  const scaledW = sourceWidth * scale;
+  const offsetX = Math.max(0, (emSquare - scaledW) / 2);
   // Flip Y: font coords have Y going up, SVG has Y going down
   // Place baseline at ~20% from bottom (descender region)
   const baselineOffset = emSquare * 0.15;
 
   function tx(x) { return Math.round((x * scale + offsetX) * 100) / 100; }
-  function ty(y) { return Math.round((emSquare - y * scale - baselineOffset) * 100) / 100; }
+  function ty(y) {
+    // Account for trim offset so vertical position within cell is preserved
+    const cellY = trimOffsetY + y;
+    return Math.round((emSquare - cellY * scale - baselineOffset) * 100) / 100;
+  }
 
   let curX = 0, curY = 0;
 

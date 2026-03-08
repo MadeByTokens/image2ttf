@@ -111,7 +111,7 @@
         return;
       }
 
-      const commands = svgPathToOpentypePath(svgPaths, cropped.imageData.width, cropped.imageData.height, EM_SQUARE);
+      const commands = svgPathToOpentypePath(svgPaths, cropped.imageData.width, cropped.imageData.height, EM_SQUARE, { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y });
       const cleaned = cleanupPaths(commands);
       if (cleaned.length === 0) return;
 

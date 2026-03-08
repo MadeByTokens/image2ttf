@@ -227,7 +227,8 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
           svgPaths,
           cropped.imageData.width,
           cropped.imageData.height,
-          EM_SQUARE
+          EM_SQUARE,
+          { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y }
         );
         const cleaned = cleanupPaths(commands);
         if (cleaned.length > 0) {

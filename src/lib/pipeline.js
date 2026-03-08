@@ -34,12 +34,13 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
 
       if (svgPaths.length === 0) continue;
 
-      // Convert to opentype path commands
+      // Convert to opentype path commands, using cell height for uniform scaling
       const commands = svgPathToOpentypePath(
         svgPaths,
         cropped.imageData.width,
         cropped.imageData.height,
-        EM_SQUARE
+        EM_SQUARE,
+        { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y }
       );
 
       // Clean up noise
