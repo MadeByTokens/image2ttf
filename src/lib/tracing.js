@@ -26,31 +26,25 @@ export function traceGlyph(imageData, options = {}) {
   // imagetracerjs expects an ImageData-like object
   const svgString = ImageTracer.imagedataToSVG(imageData, defaultOptions);
 
-  // Parse out path d attributes from the SVG
+  // Parse paths with their fill colors — only keep dark-filled paths
   const paths = [];
-  const pathRegex = /\bd="([^"]+)"/g;
+  const pathRegex = /fill="rgb\((\d+),(\d+),(\d+)\)"[^>]*\bd="([^"]+)"/g;
   let match;
   while ((match = pathRegex.exec(svgString)) !== null) {
-    const d = match[1].trim();
-    // Skip empty or background-only paths
-    if (d && d !== 'M 0 0' && !isBackgroundRect(d, imageData.width, imageData.height)) {
+    const r = parseInt(match[1]);
+    const g = parseInt(match[2]);
+    const b = parseInt(match[3]);
+    const d = match[4].trim();
+
+    // Only keep dark-colored paths (the actual character ink)
+    // Skip white/light paths (background negative space)
+    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (brightness < 128 && d && d !== 'M 0 0') {
       paths.push(d);
     }
   }
 
   return paths;
-}
-
-/**
- * Check if a path is just the background rectangle
- */
-function isBackgroundRect(d, width, height) {
-  // imagetracerjs often generates a background rect covering the full image
-  if (d.includes(`${width}`) && d.includes(`${height}`) && d.startsWith('M 0 0')) {
-    const parts = d.split(/[MLZ\s]+/).filter(Boolean);
-    if (parts.length <= 10) return true;
-  }
-  return false;
 }
 
 /**
@@ -254,7 +248,10 @@ function signedArea(commands) {
 
 /**
  * Split commands into individual contours and fix winding direction
- * TTF convention: clockwise outer contours (positive area), counter-clockwise inner (negative area)
+ *
+ * TrueType convention (Y-up coordinate system):
+ *   - Outer contours: clockwise → signedArea < 0 (trapezoidal formula)
+ *   - Inner contours (holes): counter-clockwise → signedArea > 0
  */
 function fixWinding(commands) {
   // Split into contours
@@ -276,18 +273,18 @@ function fixWinding(commands) {
   const contourData = contours.map(c => ({ contour: c, area: signedArea(c) }));
   contourData.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
 
-  // The largest contour is the outer contour — should be clockwise (area > 0)
-  // All other contours are inner (holes) — should be counter-clockwise (area < 0)
+  // Largest contour = outer → must be clockwise (area < 0 in Y-up trapezoidal formula)
+  // Smaller contours = inner holes → must be counter-clockwise (area > 0)
   const fixed = [];
   for (let i = 0; i < contourData.length; i++) {
     const { contour, area } = contourData[i];
     const isOuter = i === 0;
 
-    if (isOuter && area < 0) {
-      // Outer contour should be clockwise — reverse it
+    if (isOuter && area > 0) {
+      // Outer contour is CCW — reverse to CW
       fixed.push(...reverseContour(contour));
-    } else if (!isOuter && area > 0) {
-      // Inner contour should be counter-clockwise — reverse it
+    } else if (!isOuter && area < 0) {
+      // Inner contour is CW — reverse to CCW
       fixed.push(...reverseContour(contour));
     } else {
       fixed.push(...contour);

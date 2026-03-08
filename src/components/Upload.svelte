@@ -56,14 +56,35 @@
   function onFileChange(e) {
     handleFile(e.target.files[0]);
   }
+
+  async function loadExample() {
+    try {
+      const res = await fetch(import.meta.env.BASE_URL + 'font_test.png');
+      if (!res.ok) throw new Error('Failed to fetch example image');
+      const blob = await res.blob();
+      const file = new File([blob], 'font_test.png', { type: 'image/png' });
+      handleFile(file);
+    } catch (err) {
+      setError('Could not load example image: ' + err.message);
+    }
+  }
 </script>
 
 <div class="flex flex-col items-center gap-6">
   <h2 class="text-2xl font-bold">Upload Your Handwriting</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
     Upload an image of your handwritten characters arranged in a grid
-    (rows of a-z, A-Z, 0-9, and punctuation).
+    (rows of a-z, A-Z, 0-9, and punctuation), or try the example below first.
   </p>
+
+  <button
+    onclick={loadExample}
+    class="px-4 py-2 text-sm font-medium rounded-lg border border-indigo-300 dark:border-indigo-600
+           text-indigo-600 dark:text-indigo-400
+           hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+  >
+    Try with example image
+  </button>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
