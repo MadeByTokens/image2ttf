@@ -1,6 +1,6 @@
 <script>
   import { appState, setError, resyncCharMap } from '../lib/store.svelte.js';
-  import { autoDetectGrid } from '../lib/segmentation.js';
+  import { autoDetectGrid, detectColumns } from '../lib/segmentation.js';
   import { DEFAULT_CHARSET, DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
 
@@ -57,6 +57,42 @@
     if (!appState.grid) return;
     resyncCharMap();
     drawOverlay();
+  }
+
+  /** Re-detect columns: keep row boundaries, re-run column detection within each row */
+  function redetectColumns() {
+    if (!appState.grid || !appState.imageCanvas) return;
+    try {
+      const ctx = appState.imageCanvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
+      const opts = {
+        darkPixelThreshold: darkThreshold,
+        colDensityThreshold: colDensity,
+        minColWidth: minColW,
+        minGapFraction: gapFraction
+      };
+
+      const rows = appState.grid.rows;
+      const newCells = [];
+      for (const row of rows) {
+        const cols = detectColumns(imageData, row, opts);
+        const rowCells = cols.map(col => ({
+          x: col.start,
+          y: row.start,
+          w: col.end - col.start,
+          h: row.end - row.start
+        }));
+        newCells.push(rowCells);
+      }
+
+      appState.grid = { rows, cells: newCells };
+      resyncCharMap();
+      selectedCell = null;
+      contextMenu = null;
+      drawOverlay();
+    } catch (err) {
+      setError('Column detection failed: ' + err.message);
+    }
   }
 
   onMount(() => {
@@ -744,10 +780,16 @@
       title="Keep current boxes, re-assign labels from charset"
     >Re-label</button>
     <button
+      onclick={redetectColumns}
+      class="px-3 py-1.5 text-sm rounded-lg border border-indigo-300 dark:border-indigo-600
+             text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+      title="Keep row boundaries, re-detect columns within each row"
+    >Re-detect</button>
+    <button
       onclick={resetDetection}
       class="px-3 py-1.5 text-sm rounded-lg border border-red-300 dark:border-red-600
              text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-      title="Re-run full auto-detection, replacing all boxes and labels"
+      title="Re-run full auto-detection from scratch, replacing all rows and cells"
     >Reset</button>
     <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
       <button
