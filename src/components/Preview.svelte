@@ -485,7 +485,7 @@
 
     <div class="w-full max-w-lg min-h-24 p-6 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 flex items-center justify-center">
       {#if fontBlobUrl}
-        <p style="font-family: 'PreviewFont', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word;"
+        <p style="font-family: 'PreviewFont', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap;"
            class="text-gray-900 dark:text-gray-100 text-center w-full">
           {previewText}
         </p>
