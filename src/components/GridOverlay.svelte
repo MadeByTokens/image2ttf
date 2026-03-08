@@ -21,7 +21,8 @@
   let minColW = $state(MIN_COL_WIDTH);
   let gapFraction = $state(MIN_GAP_FRACTION);
 
-  function runDetection() {
+  /** Full reset: re-run auto-detection from scratch, replacing grid and labels */
+  function resetDetection() {
     if (!appState.imageCanvas) return;
     try {
       const ctx = appState.imageCanvas.getContext('2d');
@@ -51,9 +52,18 @@
     }
   }
 
+  /** Re-detect labels: keep current bboxes, re-assign labels from DEFAULT_CHARSET */
+  function redetectLabels() {
+    if (!appState.grid) return;
+    resyncCharMap();
+    drawOverlay();
+  }
+
   onMount(() => {
-    if (appState.imageCanvas) {
-      runDetection();
+    if (appState.imageCanvas && !appState.grid) {
+      resetDetection();
+    } else if (appState.grid) {
+      drawOverlay();
     }
   });
 
@@ -478,10 +488,17 @@
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
     >Uniform Grid</button>
     <button
-      onclick={runDetection}
+      onclick={redetectLabels}
       class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-    >Re-detect</button>
+      title="Keep current boxes, re-assign labels from charset"
+    >Re-label</button>
+    <button
+      onclick={resetDetection}
+      class="px-3 py-1.5 text-sm rounded-lg border border-red-300 dark:border-red-600
+             text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+      title="Re-run full auto-detection, replacing all boxes and labels"
+    >Reset</button>
     <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
       <button
         onclick={() => { mode = 'auto'; selectedCell = null; contextMenu = null; drawOverlay(); }}
@@ -543,9 +560,9 @@
       </div>
       <div class="flex gap-2 mt-3">
         <button
-          onclick={runDetection}
+          onclick={resetDetection}
           class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >Apply & Re-detect</button>
+        >Apply & Reset</button>
         <button
           onclick={() => { darkThreshold = DARK_PIXEL_THRESHOLD; rowDensity = ROW_DENSITY_THRESHOLD; colDensity = COL_DENSITY_THRESHOLD; minRowH = MIN_ROW_HEIGHT; minColW = MIN_COL_WIDTH; gapFraction = MIN_GAP_FRACTION; }}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
