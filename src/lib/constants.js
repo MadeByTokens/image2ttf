@@ -21,10 +21,10 @@ export const DESCENDER = -200;
 
 // Grid detection defaults
 export const MIN_ROW_HEIGHT = 20;
-export const MIN_COL_WIDTH = 10;
+export const MIN_COL_WIDTH = 3;
 export const DARK_PIXEL_THRESHOLD = 100; // pixels darker than this count as "ink" (aggressive to ignore lined paper)
 export const ROW_DENSITY_THRESHOLD = 0.01; // minimum fraction of dark pixels to count as content row
-export const COL_DENSITY_THRESHOLD = 0.005;
+export const COL_DENSITY_THRESHOLD = 0.001;
 
 // Gap detection
-export const MIN_GAP_FRACTION = 0.15; // minimum gap size as fraction of average cell size
+export const MIN_GAP_FRACTION = 0.08; // minimum gap size as fraction of average cell size

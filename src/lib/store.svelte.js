@@ -1,3 +1,5 @@
+import { DEFAULT_CHARSET } from './constants.js';
+
 // Svelte 5 runes-based global state
 export const appState = $state({
   currentStep: 0,
@@ -40,6 +42,30 @@ export function setTheme(theme) {
     localStorage.setItem('theme', theme);
   }
   applyTheme(theme);
+}
+
+/**
+ * Resync charMap to match the current grid cell count.
+ * Extends from DEFAULT_CHARSET or truncates as needed.
+ */
+export function resyncCharMap() {
+  if (!appState.grid) return;
+  const totalCells = appState.grid.cells.flat().length;
+  const current = appState.charMap;
+
+  if (current.length === totalCells) return;
+
+  if (current.length < totalCells) {
+    // Extend with characters from DEFAULT_CHARSET that aren't already used
+    const needed = totalCells - current.length;
+    const available = DEFAULT_CHARSET.filter(c => !current.includes(c));
+    const extra = available.slice(0, needed);
+    // If we still need more, fill with '?'
+    while (extra.length < needed) extra.push('?');
+    appState.charMap = [...current, ...extra];
+  } else {
+    appState.charMap = current.slice(0, totalCells);
+  }
 }
 
 export function applyTheme(theme) {
