@@ -166,6 +166,32 @@
         charIdx++;
       }
     }
+
+    // Draw row separators in edit mode (dashed lines between rows)
+    if (mode === 'edit' && cells.length > 1) {
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)'; // orange
+      for (let ri = 0; ri < cells.length; ri++) {
+        const row = appState.grid.rows[ri];
+        // Draw top boundary of each row
+        const y = row.start * displayScale;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasEl.width, y);
+        ctx.stroke();
+        // Draw bottom boundary of last row
+        if (ri === cells.length - 1) {
+          const yEnd = row.end * displayScale;
+          ctx.beginPath();
+          ctx.moveTo(0, yEnd);
+          ctx.lineTo(canvasEl.width, yEnd);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
   }
 
   $effect(() => {
@@ -189,6 +215,25 @@
         if (imgX >= c.x && imgX <= c.x + c.w && imgY >= c.y && imgY <= c.y + c.h) {
           return { rowIdx: ri, colIdx: ci };
         }
+      }
+    }
+    return null;
+  }
+
+  /** Check if cursor is near a row boundary (between two rows). Returns { rowIdx, boundary } or null. */
+  function getRowSeparatorAt(canvasX, canvasY) {
+    if (!appState.grid) return null;
+    const imgY = canvasY / displayScale;
+    const hitZone = 8 / displayScale;
+    const rows = appState.grid.rows;
+    for (let ri = 0; ri < rows.length; ri++) {
+      // Top boundary (shared with previous row's bottom)
+      if (Math.abs(imgY - rows[ri].start) < hitZone) {
+        return { rowIdx: ri, boundary: 'top' };
+      }
+      // Bottom boundary of last row
+      if (ri === rows.length - 1 && Math.abs(imgY - rows[ri].end) < hitZone) {
+        return { rowIdx: ri, boundary: 'bottom' };
       }
     }
     return null;
@@ -242,6 +287,20 @@
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
+    // Check row separator first (higher priority than cell edges)
+    const sepHit = getRowSeparatorAt(cx, cy);
+    if (sepHit) {
+      const rows = appState.grid.rows;
+      dragState = {
+        type: 'rowSep',
+        ...sepHit,
+        startY: cy,
+        origY: sepHit.boundary === 'top' ? rows[sepHit.rowIdx].start : rows[sepHit.rowIdx].end
+      };
+      e.preventDefault();
+      return;
+    }
+
     const edgeHit = getEdgeAt(cx, cy);
     if (edgeHit) {
       const cell = appState.grid.cells[edgeHit.rowIdx][edgeHit.colIdx];
@@ -268,6 +327,45 @@
     const cy = e.clientY - rect.top;
 
     if (dragState) {
+      if (dragState.type === 'rowSep') {
+        // Dragging a row separator
+        const dy = (cy - dragState.startY) / displayScale;
+        const newY = Math.max(0, dragState.origY + dy);
+        const { rowIdx, boundary } = dragState;
+        const rows = appState.grid.rows;
+        const cells = appState.grid.cells;
+
+        if (boundary === 'top') {
+          // Moving the top of this row (and bottom of previous row if exists)
+          const minY = rowIdx > 0 ? rows[rowIdx - 1].start + 10 : 0;
+          const maxY = rows[rowIdx].end - 10;
+          const clampedY = Math.max(minY, Math.min(maxY, newY));
+          rows[rowIdx].start = clampedY;
+          if (rowIdx > 0) rows[rowIdx - 1].end = clampedY;
+          // Update all cells in this row
+          for (const c of cells[rowIdx]) {
+            c.y = clampedY;
+            c.h = rows[rowIdx].end - clampedY;
+          }
+          // Update cells in previous row
+          if (rowIdx > 0) {
+            for (const c of cells[rowIdx - 1]) {
+              c.h = clampedY - c.y;
+            }
+          }
+        } else {
+          // Moving bottom of last row
+          const minY = rows[rowIdx].start + 10;
+          const clampedY = Math.max(minY, newY);
+          rows[rowIdx].end = clampedY;
+          for (const c of cells[rowIdx]) {
+            c.h = clampedY - c.y;
+          }
+        }
+        drawOverlay();
+        return;
+      }
+
       const dx = (cx - dragState.startX) / displayScale;
       const dy = (cy - dragState.startY) / displayScale;
       const cell = appState.grid.cells[dragState.rowIdx][dragState.colIdx];
@@ -281,11 +379,17 @@
       return;
     }
 
-    const edgeHit = getEdgeAt(cx, cy);
-    if (edgeHit) {
-      canvasEl.style.cursor = (edgeHit.edge === 'left' || edgeHit.edge === 'right') ? 'col-resize' : 'row-resize';
+    // Cursor hints
+    const sepHit = getRowSeparatorAt(cx, cy);
+    if (sepHit) {
+      canvasEl.style.cursor = 'row-resize';
     } else {
-      canvasEl.style.cursor = getCellAt(cx, cy) ? 'pointer' : 'default';
+      const edgeHit = getEdgeAt(cx, cy);
+      if (edgeHit) {
+        canvasEl.style.cursor = (edgeHit.edge === 'left' || edgeHit.edge === 'right') ? 'col-resize' : 'row-resize';
+      } else {
+        canvasEl.style.cursor = getCellAt(cx, cy) ? 'pointer' : 'default';
+      }
     }
   }
 
@@ -600,7 +704,7 @@
 
   {#if mode === 'edit'}
     <p class="text-xs text-gray-400 dark:text-gray-500 max-w-md text-center">
-      Click to select &amp; edit label. Drag edges to resize. Double-click empty area to add cell. Right-click for more options.
+      Click to select &amp; edit label. Drag cell edges to resize. Drag orange row lines to adjust row boundaries. Double-click to add cell. Right-click for more.
     </p>
   {/if}
 
