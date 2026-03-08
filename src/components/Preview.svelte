@@ -11,6 +11,8 @@
   let tracing = $state(false);
   let traced = $state(false);
   let fontBlobUrl = $state(null);
+  let fontFamily = $state('PreviewFont');
+  let fontVersion = 0;
   let styleEl = $state(null);
   let showGlyphs = $state(false);
   let glyphEntries = $state([]);
@@ -152,24 +154,14 @@
     if (!appState.glyphPaths || appState.glyphPaths.size === 0) return;
 
     try {
-      const font = createFont(appState.glyphPaths, { familyName: 'PreviewFont' });
+      // Use a versioned font-family name to defeat browser font caching
+      fontVersion++;
+      const name = `PreviewFont${fontVersion}`;
+      const font = createFont(appState.glyphPaths, { familyName: name });
 
-      // Set kerning pairs for runtime preview
+      // Inject kerning into the binary kern table
       const kerning = appState.kerningPairs;
-      if (kerning && Object.keys(kerning).length > 0) {
-        for (const [pairStr, value] of Object.entries(kerning)) {
-          if (pairStr.length !== 2 || value === 0) continue;
-          const left = font.charToGlyphIndex(pairStr[0]);
-          const right = font.charToGlyphIndex(pairStr[1]);
-          if (left > 0 && right > 0) {
-            font.kerningPairs[left + ',' + right] = value;
-          }
-        }
-      }
-
       let buffer = font.toArrayBuffer();
-
-      // Inject kern table into the binary for proper rendering
       if (kerning && Object.keys(kerning).length > 0) {
         const pairs = buildKernPairs(font, kerning);
         if (pairs.length > 0) {
@@ -181,15 +173,15 @@
 
       if (fontBlobUrl) URL.revokeObjectURL(fontBlobUrl);
       fontBlobUrl = URL.createObjectURL(blob);
+      fontFamily = name;
 
       if (!styleEl) {
         styleEl = document.createElement('style');
         document.head.appendChild(styleEl);
       }
-      // Use unique URL param to force browser to reload the font
       styleEl.textContent = `
         @font-face {
-          font-family: 'PreviewFont';
+          font-family: '${name}';
           src: url('${fontBlobUrl}') format('truetype');
           font-weight: normal;
           font-style: normal;
@@ -485,7 +477,7 @@
 
     <div class="w-full max-w-lg min-h-24 p-6 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 flex items-center justify-center">
       {#if fontBlobUrl}
-        <p style="font-family: 'PreviewFont', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap;"
+        <p style="font-family: '{fontFamily}', monospace; font-size: 2rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap;"
            class="text-gray-900 dark:text-gray-100 text-center w-full">
           {previewText}
         </p>

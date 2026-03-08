@@ -7,6 +7,7 @@
   let canvasEl = $state(null);
   let containerEl = $state(null);
   let displayScale = 1;
+  let zoomLevel = $state(1);
   let mode = $state('auto'); // 'auto' | 'edit'
   let selectedCell = $state(null);
   let dragState = $state(null);
@@ -155,7 +156,8 @@
 
     const img = appState.imageCanvas;
     const maxWidth = containerEl?.clientWidth || 800;
-    displayScale = Math.min(1, maxWidth / img.width);
+    const baseScale = Math.min(1, maxWidth / img.width);
+    displayScale = baseScale * zoomLevel;
 
     canvasEl.width = img.width * displayScale;
     canvasEl.height = img.height * displayScale;
@@ -203,28 +205,63 @@
       }
     }
 
-    // Draw row separators in edit mode (dashed lines between rows)
-    if (mode === 'edit' && cells.length > 1) {
+    // Draw row bands and separators in edit mode
+    if (mode === 'edit' && cells.length > 0) {
+      const rows = appState.grid.rows;
+      const rowColors = [
+        { line: 'rgba(234, 88, 12, 0.85)', fill: 'rgba(234, 88, 12, 0.06)' },  // orange
+        { line: 'rgba(6, 182, 212, 0.85)', fill: 'rgba(6, 182, 212, 0.06)' },   // teal
+      ];
+
+      // Draw row band shading
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const color = rowColors[ri % 2];
+        const y1 = row.start * displayScale;
+        const y2 = row.end * displayScale;
+        ctx.fillStyle = color.fill;
+        ctx.fillRect(0, y1, canvasEl.width, y2 - y1);
+      }
+
+      // Draw overlap zones in red
+      for (let ri = 0; ri < rows.length - 1; ri++) {
+        const gap = rows[ri + 1].start - rows[ri].end;
+        if (gap < 0) {
+          // Overlap: row[ri].end > row[ri+1].start
+          const overlapTop = rows[ri + 1].start * displayScale;
+          const overlapBot = rows[ri].end * displayScale;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+          ctx.fillRect(0, overlapTop, canvasEl.width, overlapBot - overlapTop);
+        }
+      }
+
+      // Draw boundary lines — each row has its own top and bottom
       ctx.save();
       ctx.setLineDash([6, 4]);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)'; // orange
-      for (let ri = 0; ri < cells.length; ri++) {
-        const row = appState.grid.rows[ri];
-        // Draw top boundary of each row
-        const y = row.start * displayScale;
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const color = rowColors[ri % 2];
+        ctx.strokeStyle = color.line;
+
+        // Top boundary
+        const yTop = row.start * displayScale;
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvasEl.width, y);
+        ctx.moveTo(0, yTop);
+        ctx.lineTo(canvasEl.width, yTop);
         ctx.stroke();
-        // Draw bottom boundary of last row
-        if (ri === cells.length - 1) {
-          const yEnd = row.end * displayScale;
-          ctx.beginPath();
-          ctx.moveTo(0, yEnd);
-          ctx.lineTo(canvasEl.width, yEnd);
-          ctx.stroke();
-        }
+
+        // Bottom boundary
+        const yBot = row.end * displayScale;
+        ctx.beginPath();
+        ctx.moveTo(0, yBot);
+        ctx.lineTo(canvasEl.width, yBot);
+        ctx.stroke();
+
+        // Row label
+        ctx.fillStyle = color.line;
+        ctx.font = `${Math.max(9, 10 * displayScale)}px sans-serif`;
+        ctx.fillText(`R${ri + 1}`, 3, yTop + 12 * displayScale);
       }
       ctx.restore();
     }
@@ -234,10 +271,17 @@
     const grid = appState.grid;
     const canvas = canvasEl;
     const _mode = mode; // track mode changes to redraw row separators
+    const _zoom = zoomLevel; // track zoom changes
     if (grid && canvas) {
       untrack(() => drawOverlay());
     }
   });
+
+  function handleWheel(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    zoomLevel = Math.max(0.5, Math.min(5, zoomLevel * delta));
+  }
 
   // --- Edit mode interactions ---
 
@@ -263,14 +307,15 @@
     const imgY = canvasY / displayScale;
     const hitZone = 8 / displayScale;
     const rows = appState.grid.rows;
+    // Check bottom boundaries first (so bottom of row N takes priority over top of row N+1 when they're close)
     for (let ri = 0; ri < rows.length; ri++) {
-      // Top boundary (shared with previous row's bottom)
+      if (Math.abs(imgY - rows[ri].end) < hitZone) {
+        return { rowIdx: ri, boundary: 'bottom' };
+      }
+    }
+    for (let ri = 0; ri < rows.length; ri++) {
       if (Math.abs(imgY - rows[ri].start) < hitZone) {
         return { rowIdx: ri, boundary: 'top' };
-      }
-      // Bottom boundary of last row
-      if (ri === rows.length - 1 && Math.abs(imgY - rows[ri].end) < hitZone) {
-        return { rowIdx: ri, boundary: 'bottom' };
       }
     }
     return null;
@@ -365,7 +410,7 @@
 
     if (dragState) {
       if (dragState.type === 'rowSep') {
-        // Dragging a row separator
+        // Dragging a row separator — each row is independent
         const dy = (cy - dragState.startY) / displayScale;
         const newY = Math.max(0, dragState.origY + dy);
         const { rowIdx, boundary } = dragState;
@@ -373,25 +418,14 @@
         const cells = appState.grid.cells;
 
         if (boundary === 'top') {
-          // Moving the top of this row (and bottom of previous row if exists)
-          const minY = rowIdx > 0 ? rows[rowIdx - 1].start + 10 : 0;
           const maxY = rows[rowIdx].end - 10;
-          const clampedY = Math.max(minY, Math.min(maxY, newY));
+          const clampedY = Math.max(0, Math.min(maxY, newY));
           rows[rowIdx].start = clampedY;
-          if (rowIdx > 0) rows[rowIdx - 1].end = clampedY;
-          // Update all cells in this row
           for (const c of cells[rowIdx]) {
             c.y = clampedY;
             c.h = rows[rowIdx].end - clampedY;
           }
-          // Update cells in previous row
-          if (rowIdx > 0) {
-            for (const c of cells[rowIdx - 1]) {
-              c.h = clampedY - c.y;
-            }
-          }
         } else {
-          // Moving bottom of last row
           const minY = rows[rowIdx].start + 10;
           const clampedY = Math.max(minY, newY);
           rows[rowIdx].end = clampedY;
@@ -897,7 +931,32 @@
     </p>
   {/if}
 
-  <div bind:this={containerEl} class="w-full max-w-3xl overflow-auto border rounded-lg dark:border-gray-700 relative">
+  <!-- Zoom controls -->
+  <div class="flex items-center gap-2">
+    <button
+      onclick={() => { zoomLevel = Math.max(0.5, zoomLevel / 1.25); }}
+      class="px-2 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-600
+             hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      aria-label="Zoom out"
+    >-</button>
+    <span class="text-xs text-gray-500 dark:text-gray-400 w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
+    <button
+      onclick={() => { zoomLevel = Math.min(5, zoomLevel * 1.25); }}
+      class="px-2 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-600
+             hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      aria-label="Zoom in"
+    >+</button>
+    {#if zoomLevel !== 1}
+      <button
+        onclick={() => { zoomLevel = 1; }}
+        class="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600
+               hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      >Reset</button>
+    {/if}
+  </div>
+
+  <div bind:this={containerEl} class="w-full max-w-3xl overflow-auto border rounded-lg dark:border-gray-700 relative max-h-[70vh]"
+       onwheel={handleWheel}>
     <canvas
       bind:this={canvasEl}
       class="block mx-auto"
