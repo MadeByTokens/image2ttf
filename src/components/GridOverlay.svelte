@@ -95,7 +95,8 @@
           x: col.start,
           y: row.start,
           w: col.end - col.start,
-          h: row.end - row.start
+          h: row.end - row.start,
+          baseline: row.baseline
         }));
         newCells.push(rowCells);
       }
@@ -144,12 +145,13 @@
     for (let r = 0; r < numRows; r++) {
       const y = r * cellH;
       const h = r === numRows - 1 ? imgH - y : cellH;
-      rows.push({ start: y, end: y + h });
+      const baseline = Math.round(y + h * 0.75);
+      rows.push({ start: y, end: y + h, baseline });
       const rowCells = [];
       for (let c = 0; c < numCols; c++) {
         const x = c * cellW;
         const w = c === numCols - 1 ? imgW - x : cellW;
-        rowCells.push({ x, y, w, h });
+        rowCells.push({ x, y, w, h, baseline });
       }
       cells.push(rowCells);
     }
@@ -448,10 +450,15 @@
         const rows = appState.grid.rows;
 
         if (boundary === 'baseline') {
-          // Drag baseline — only moves the baseline, not cell bboxes
+          // Drag baseline — moves the baseline on row AND all cells in that row
           const minY = rows[rowIdx].start + 5;
           const maxY = rows[rowIdx].end - 5;
-          rows[rowIdx].baseline = Math.round(Math.max(minY, Math.min(maxY, newY)));
+          const newBaseline = Math.round(Math.max(minY, Math.min(maxY, newY)));
+          rows[rowIdx].baseline = newBaseline;
+          // Sync baseline to all cells in this row
+          for (const c of appState.grid.cells[rowIdx]) {
+            c.baseline = newBaseline;
+          }
         } else if (boundary === 'top') {
           // Drag row top — does NOT move cell bboxes (they're independent)
           const bl = rows[rowIdx].baseline ?? rows[rowIdx].end;
@@ -520,9 +527,11 @@
     const avgW = rowCells.length > 0
       ? rowCells.reduce((s, c) => s + c.w, 0) / rowCells.length : 40;
 
+    const baseline = row.baseline ?? Math.round(row.start + (row.end - row.start) * 0.75);
     const newCell = {
       x: Math.max(0, imgX - avgW / 2),
-      y: row.start, w: avgW, h: row.end - row.start
+      y: row.start, w: avgW, h: row.end - row.start,
+      baseline
     };
 
     let insertIdx = rowCells.findIndex(c => c.x > newCell.x);
@@ -575,9 +584,11 @@
     const rowCells = appState.grid.cells[rowIdx];
     const avgW = rowCells.length > 0
       ? rowCells.reduce((s, c) => s + c.w, 0) / rowCells.length : 40;
+    const baseline = row.baseline ?? Math.round(row.start + (row.end - row.start) * 0.75);
     const newCell = {
       x: Math.max(0, imgX - avgW / 2),
-      y: row.start, w: avgW, h: row.end - row.start
+      y: row.start, w: avgW, h: row.end - row.start,
+      baseline
     };
     let insertIdx = rowCells.findIndex(c => c.x > newCell.x);
     if (insertIdx === -1) insertIdx = rowCells.length;
@@ -606,11 +617,13 @@
     // Update existing cells in this row
     for (const c of cells[rowIdx]) {
       c.h = midY - c.y;
+      c.baseline = row.baseline;
     }
 
     // Create cells for new row (copy column structure)
     const newCells = cells[rowIdx].map(c => ({
-      x: c.x, y: midY, w: c.w, h: newRow.end - midY
+      x: c.x, y: midY, w: c.w, h: newRow.end - midY,
+      baseline: newRow.baseline
     }));
 
     rows.splice(rowIdx + 1, 0, newRow);
@@ -650,10 +663,11 @@
       }
     }
 
-    const newRow = { start: newStart, end: newEnd };
+    const newRow = { start: newStart, end: newEnd, baseline: Math.round(newStart + (newEnd - newStart) * 0.75) };
     // Copy column structure from current row
     const newCells = cells[rowIdx].map(c => ({
-      x: c.x, y: newStart, w: c.w, h: newEnd - newStart
+      x: c.x, y: newStart, w: c.w, h: newEnd - newStart,
+      baseline: newRow.baseline
     }));
 
     rows.splice(rowIdx + 1, 0, newRow);
@@ -714,7 +728,7 @@
     for (let c = 0; c < avgCols; c++) {
       const x = c * colW;
       const w = c === avgCols - 1 ? imgW - x : colW;
-      newCells.push({ x, y: start, w, h: end - start });
+      newCells.push({ x, y: start, w, h: end - start, baseline: newRow.baseline });
     }
 
     rows.splice(insertIdx, 0, newRow);
@@ -732,7 +746,7 @@
     const cells = appState.grid.cells[rowIdx];
     const cell = cells[colIdx];
     const halfW = cell.w / 2;
-    cells.splice(colIdx, 1, { x: cell.x, y: cell.y, w: halfW, h: cell.h }, { x: cell.x + halfW, y: cell.y, w: halfW, h: cell.h });
+    cells.splice(colIdx, 1, { x: cell.x, y: cell.y, w: halfW, h: cell.h, baseline: cell.baseline }, { x: cell.x + halfW, y: cell.y, w: halfW, h: cell.h, baseline: cell.baseline });
     appState.grid = { ...appState.grid };
     resyncCharMap();
     contextMenu = null;

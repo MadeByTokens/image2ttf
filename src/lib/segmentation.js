@@ -249,12 +249,13 @@ export function autoDetectGrid(imageData, opts = {}) {
     const clipBound = { start: clipTop, end: clipBottom };
     const cols = detectColumns(imageData, clipBound, opts);
 
-    // But cell bboxes use the full row extent
+    // Cell bboxes use full row extent but carry baseline for overlap filtering
     const rowCells = cols.map(col => ({
       x: col.start,
       y: rows[i].start,
       w: col.end - col.start,
-      h: rows[i].end - rows[i].start
+      h: rows[i].end - rows[i].start,
+      baseline: rows[i].baseline
     }));
     cells.push(rowCells);
   }
@@ -311,6 +312,69 @@ export function cropCell(sourceCanvas, rect) {
         data[idx + 1] = 255;
         data[idx + 2] = 255;
         data[idx + 3] = 255;
+      }
+    }
+  }
+
+  // Baseline-aware filtering: remove disconnected ink from adjacent rows
+  if (rect.baseline != null && hasContent) {
+    const baselineLocal = Math.round(rect.baseline - y);
+    // Primary zone: top of cell to baseline + small margin (catches round bottoms)
+    const margin = Math.round(Math.max(5, baselineLocal * 0.1));
+    const primaryBottom = Math.min(h, baselineLocal + margin);
+
+    // Flood fill from dark pixels in primary zone to find connected content
+    const keep = new Uint8Array(w * h);
+    const stack = [];
+
+    for (let py = 0; py < primaryBottom; py++) {
+      for (let px = 0; px < w; px++) {
+        const pos = py * w + px;
+        if (data[pos * 4] === 0 && !keep[pos]) {
+          stack.push(pos);
+          while (stack.length > 0) {
+            const cur = stack.pop();
+            if (keep[cur]) continue;
+            keep[cur] = 1;
+            const cx = cur % w;
+            const cy = (cur - cx) / w;
+            for (let ddy = -1; ddy <= 1; ddy++) {
+              for (let ddx = -1; ddx <= 1; ddx++) {
+                if (ddx === 0 && ddy === 0) continue;
+                const nx = cx + ddx, ny = cy + ddy;
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                  const npos = ny * w + nx;
+                  if (!keep[npos] && data[npos * 4] === 0) {
+                    stack.push(npos);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Mask out dark pixels not connected to primary zone and recompute bounds
+    hasContent = false;
+    minX = w; minY = h; maxX = 0; maxY = 0;
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const idx = (py * w + px) * 4;
+        if (data[idx] === 0) {
+          if (!keep[py * w + px]) {
+            data[idx] = 255;
+            data[idx + 1] = 255;
+            data[idx + 2] = 255;
+            data[idx + 3] = 255;
+          } else {
+            minX = Math.min(minX, px);
+            minY = Math.min(minY, py);
+            maxX = Math.max(maxX, px);
+            maxY = Math.max(maxY, py);
+            hasContent = true;
+          }
+        }
       }
     }
   }
