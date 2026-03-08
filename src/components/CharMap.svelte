@@ -1,6 +1,9 @@
 <script>
   import { appState } from '../lib/store.svelte.js';
   import { generateThumbnailsAsync, abortCompute } from '../lib/compute.js';
+  import { createLogger } from '../lib/logger.js';
+
+  const logger = createLogger('CharMap');
 
   let thumbnails = $state([]);
   let computing = $state(false);
@@ -47,7 +50,7 @@
       thumbnails = thumbs;
     } catch (err) {
       if (err.message === 'Aborted') return;
-      console.warn('Thumbnail generation failed:', err);
+      logger.warn('Thumbnail generation failed:', err);
     } finally {
       computing = false;
     }

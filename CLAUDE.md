@@ -21,19 +21,28 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 - `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value).
 - `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
 - `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`; exports `smoothnessToOpts(1-10)` for mapping slider to imagetracerjs params
+- `src/lib/glyph-utils.js` — shared glyph utilities: `computeGlyphWidth`, `computeSpaceWidth`, `traceCell` (used by pipeline, worker, Preview)
+- `src/lib/redetect-columns.js` — shared `redetectColumnsForRows()` (used by worker and compute fallback)
 - `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `smoothness`
 - `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; `injectKernTable(buffer, pairs)` manually builds kern table binary; `downloadFont(font, filename, kerningMap)` with kern support
 - `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
+- `src/lib/errors.js` — custom error classes: `ImageLoadError`, `GridDetectionError`, `TracingError`, `FontBuildError`
+- `src/lib/logger.js` — structured logger toggled via `localStorage.setItem('debug', '1')`
 - `src/lib/compute-worker.js` — Web Worker for heavy computation (grid detect, thumbnails, tracing)
 - `src/lib/compute.js` — async API wrapping the worker with abort support and main-thread fallback
+- `src/components/GlyphGallery.svelte` — glyph grid + inspector (extracted from Preview)
+- `src/components/KerningEditor.svelte` — kerning pair editor (extracted from Preview)
+- `src/components/grid/ContextMenu.svelte` — right-click context menu (extracted from GridOverlay)
+- `src/components/grid/AdvancedPanel.svelte` — advanced detection parameters (extracted from GridOverlay)
 
 ## Commands
 
 ```bash
-npm run dev        # Start dev server
-npm run build      # Production build
-npm run test       # Run vitest (25 tests: 14 unit + 11 e2e)
-npm run deploy     # Build + publish to GitHub Pages via gh-pages
+npm run dev            # Start dev server
+npm run build          # Run tests + production build
+npm run test           # Run vitest (54 tests: 43 unit + 11 e2e)
+npm run test:coverage  # Run tests with v8 coverage report
+npm run deploy         # Run tests + build + publish to GitHub Pages via gh-pages
 ```
 
 ## Svelte 5 Rules
@@ -45,17 +54,18 @@ npm run deploy     # Build + publish to GitHub Pages via gh-pages
 
 ## Workflow Rules
 
-- **Always run tests before committing**: `npx vitest run` — all 25 tests must pass before any commit or deploy.
+- **Always run tests before committing**: `npx vitest run` — all 54 tests must pass before any commit or deploy.
 - **Always run build after code changes**: `npx vite build` — verify no build errors before committing.
 - **Record discoveries**: When you find a bug, gotcha, or important insight, immediately update MEMORY.md and/or CLAUDE.md so it persists across sessions.
 
 ## Testing
 
-- **Unit tests** (14) — synthetic shapes for segmentation, tracing, font-builder
+- **Unit tests** (43) — segmentation, tracing, font-builder, kern injection, pipeline, glyph-utils, errors
 - **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
   - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
   - Bbox-normalized IoU: avg ~0.68, thresholds: per-glyph ≥0.20, avg ≥0.30
 - `tests/validate-font.js` — standalone manual TTF validator
+- Coverage: `npm run test:coverage` generates text + HTML report for `src/lib/`
 
 ## Key Gotchas
 
@@ -64,8 +74,8 @@ npm run deploy     # Build + publish to GitHub Pages via gh-pages
 - **Grid detection**: `autoDetectGrid(imageData, opts)` accepts overrides for all 6 thresholds. Valley splitting handles lined paper. `detectColumns` can be re-run independently to keep row boundaries.
 - Grid edits must call `resyncCharMap()`. GridOverlay preserves edits on re-mount (only resets when user clicks Reset).
 - **Glyph scaling**: Uses single `refHeight = max(all cell heights)` across entire grid for uniform scaling. All rows share the same scale factor so uppercase/lowercase align on same baseline.
-- **SVG Y-flip for glyph gallery**: Font coords Y-up, SVG Y-down. `commandsToSvgPath` in Preview.svelte flips Y via `ASCENDER - y`.
-- **Space glyph**: Auto-generated in pipeline.js from avg lowercase width × `spaceWidthPercent`. Configurable via slider in CharMap.
+- **SVG Y-flip for glyph gallery**: Font coords Y-up, SVG Y-down. `commandsToSvgPath` in GlyphGallery.svelte flips Y via `ASCENDER - y`.
+- **Space glyph**: Auto-generated via `computeSpaceWidth()` in glyph-utils.js from avg lowercase width × `spaceWidthPercent`. Configurable via slider in CharMap.
 - **Version**: Injected from package.json via Vite `define` (`__APP_VERSION__`), displayed in footer.
 - **Kerning**: opentype.js cannot write kern/GPOS tables. `injectKernTable` manually builds kern table binary and splices it into the SFNT structure. Pairs use glyph indices, sorted by `(left << 16) | right`.
 - **Smoothness**: `smoothnessToOpts(1-10)` maps slider to imagetracerjs params (`ltres`, `qtres`, `rightangleenhance`, `blurradius`, `pathomit`). Threaded through pipeline.js and Preview retrace.

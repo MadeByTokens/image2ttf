@@ -4,8 +4,9 @@
  * Keeps the main thread free for UI responsiveness.
  */
 import { autoDetectGrid, detectColumns, cropCell } from './segmentation.js';
-import { traceGlyph, svgPathToOpentypePath, cleanupPaths, smoothnessToOpts } from './tracing.js';
-import { EM_SQUARE } from './constants.js';
+import { smoothnessToOpts } from './tracing.js';
+import { traceCell, computeSpaceWidth } from './glyph-utils.js';
+import { redetectColumnsForRows } from './redetect-columns.js';
 
 let aborted = false;
 
@@ -36,28 +37,12 @@ self.onmessage = async function (e) {
           new Uint8ClampedArray(payload.dataBuffer),
           payload.width, payload.height
         );
-        const { rows, opts } = payload;
-        const newCells = [];
-        for (let i = 0; i < rows.length; i++) {
-          if (aborted) { self.postMessage({ id, type: 'aborted' }); return; }
-          const row = rows[i];
-          if (row.baseline == null) {
-            row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
-          }
-          const clipTop = i > 0
-            ? Math.round((rows[i - 1].baseline + row.baseline) / 2)
-            : row.start;
-          const clipBottom = i < rows.length - 1
-            ? Math.round((row.baseline + rows[i + 1].baseline) / 2)
-            : row.end;
-          const cols = detectColumns(imageData, { start: clipTop, end: clipBottom }, opts);
-          newCells.push(cols.map(col => ({
-            x: col.start, y: row.start,
-            w: col.end - col.start, h: row.end - row.start,
-            baseline: row.baseline
-          })));
+        const result = redetectColumnsForRows(imageData, payload.rows, payload.opts, () => aborted);
+        if (result === null) {
+          self.postMessage({ id, type: 'aborted' });
+        } else {
+          self.postMessage({ id, type: 'result', result });
         }
-        self.postMessage({ id, type: 'result', result: { rows, cells: newCells } });
         break;
       }
 
@@ -82,7 +67,8 @@ self.onmessage = async function (e) {
               imageData: cropped.empty ? null : cropped.imageData,
               index: i
             });
-          } catch {
+          } catch (err) {
+            console.warn('[compute-worker] Thumbnail crop failed for cell', i, ':', err);
             thumbs.push({ char: payload.charMap[i], empty: true, imageData: null, index: i });
           }
           if (i % 5 === 0) {
@@ -116,31 +102,10 @@ self.onmessage = async function (e) {
           if (!char || char === ' ') { continue; }
 
           try {
-            const cropped = cropCell(sourceCanvas, cell);
-            if (cropped.empty) continue;
-
-            const svgPaths = traceGlyph(cropped.imageData, tracingOpts);
-            if (svgPaths.length === 0) continue;
-
-            const commands = svgPathToOpentypePath(
-              svgPaths,
-              cropped.imageData.width,
-              cropped.imageData.height,
-              EM_SQUARE,
-              { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y }
-            );
-            const cleaned = cleanupPaths(commands);
-            if (cleaned.length === 0) continue;
-
-            let minX = Infinity, maxX = -Infinity;
-            for (const cmd of cleaned) {
-              if (cmd.x !== undefined) {
-                minX = Math.min(minX, cmd.x);
-                maxX = Math.max(maxX, cmd.x);
-              }
+            const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts);
+            if (result) {
+              entries.push({ char, commands: result.commands, width: result.width });
             }
-            const width = maxX > minX ? maxX - minX + EM_SQUARE * 0.15 : EM_SQUARE * 0.5;
-            entries.push({ char, commands: cleaned, width: Math.min(width, EM_SQUARE) });
           } catch (err) {
             // Skip failed glyphs
           }
@@ -150,13 +115,7 @@ self.onmessage = async function (e) {
         }
 
         // Auto-generate space width
-        const spacePercent = (payload.spaceWidthPercent ?? 60) / 100;
-        const lowercaseWidths = entries
-          .filter(e => e.char >= 'a' && e.char <= 'z')
-          .map(e => e.width);
-        const spaceWidth = lowercaseWidths.length > 0
-          ? Math.round(lowercaseWidths.reduce((s, w) => s + w, 0) / lowercaseWidths.length * spacePercent)
-          : Math.round(EM_SQUARE * 0.3 * spacePercent / 0.6);
+        const spaceWidth = computeSpaceWidth(entries, payload.spaceWidthPercent ?? 60);
         entries.push({ char: ' ', commands: [], width: spaceWidth });
 
         self.postMessage({ id, type: 'result', result: { entries } });

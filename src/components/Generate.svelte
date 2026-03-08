@@ -20,7 +20,7 @@
       appState.generatedFont = font;
       generated = true;
     } catch (err) {
-      setError('Font generation failed: ' + err.message);
+      setError('Font generation failed: ' + err.message + '. Try going back to Preview and removing problematic glyphs.');
     } finally {
       generating = false;
     }

@@ -3,6 +3,8 @@
   import { detectGridAsync, redetectColumnsAsync, abortCompute } from '../lib/compute.js';
   import { DEFAULT_CHARSET, DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
+  import ContextMenu from './grid/ContextMenu.svelte';
+  import AdvancedPanel from './grid/AdvancedPanel.svelte';
 
   let canvasEl = $state(null);
   let containerEl = $state(null);
@@ -50,7 +52,7 @@
       drawOverlay();
     } catch (err) {
       if (err.message === 'Aborted') return;
-      setError('Grid detection failed: ' + err.message);
+      setError('Grid detection failed: ' + err.message + '. Try adjusting Dark pixel threshold in Advanced settings, or use Uniform Grid.');
     } finally {
       computing = false;
     }
@@ -871,53 +873,15 @@
 
   <!-- Advanced parameters panel -->
   {#if showAdvanced}
-    <div class="w-full max-w-3xl border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-        Tweak detection parameters and click Re-detect to apply.
-      </p>
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Dark pixel threshold</span>
-          <input type="range" min="20" max="200" bind:value={darkThreshold} class="w-full" />
-          <span class="text-xs text-gray-400 text-center">{darkThreshold}</span>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Row density</span>
-          <input type="range" min="0.001" max="0.1" step="0.001" bind:value={rowDensity} class="w-full" />
-          <span class="text-xs text-gray-400 text-center">{rowDensity.toFixed(3)}</span>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Column density</span>
-          <input type="range" min="0.0005" max="0.05" step="0.0005" bind:value={colDensity} class="w-full" />
-          <span class="text-xs text-gray-400 text-center">{colDensity.toFixed(4)}</span>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Min row height</span>
-          <input type="number" min="3" max="100" bind:value={minRowH}
-                 class="px-2 py-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 w-full" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Min col width</span>
-          <input type="number" min="1" max="50" bind:value={minColW}
-                 class="px-2 py-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 w-full" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="text-gray-600 dark:text-gray-300">Gap fraction</span>
-          <input type="range" min="0.01" max="0.5" step="0.01" bind:value={gapFraction} class="w-full" />
-          <span class="text-xs text-gray-400 text-center">{gapFraction.toFixed(2)}</span>
-        </label>
-      </div>
-      <div class="flex gap-2 mt-3">
-        <button
-          onclick={redetectColumns}
-          class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >Apply</button>
-        <button
-          onclick={() => { darkThreshold = DARK_PIXEL_THRESHOLD; rowDensity = ROW_DENSITY_THRESHOLD; colDensity = COL_DENSITY_THRESHOLD; minRowH = MIN_ROW_HEIGHT; minColW = MIN_COL_WIDTH; gapFraction = MIN_GAP_FRACTION; }}
-          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Reset defaults</button>
-      </div>
-    </div>
+    <AdvancedPanel
+      bind:darkThreshold
+      bind:rowDensity
+      bind:colDensity
+      bind:minRowH
+      bind:minColW
+      bind:gapFraction
+      onapply={redetectColumns}
+    />
   {/if}
 
   {#if appState.grid}
@@ -1015,54 +979,15 @@
 </div>
 
 <!-- Context menu -->
-{#if contextMenu}
-  <div
-    role="menu"
-    tabindex="-1"
-    class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg shadow-lg py-1 min-w-36"
-    style="left: {contextMenu.x}px; top: {contextMenu.y}px"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => { if (e.key === 'Escape') contextMenu = null; }}
-  >
-    {#if contextMenu.type === 'cell'}
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={promptChangeLabel}>
-        Change label
-      </button>
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={promptRelabel}>
-        Relabel from here...
-      </button>
-      <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={splitCell}>
-        Split cell
-      </button>
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteCell}>
-        Delete cell
-      </button>
-    {:else if contextMenu.type === 'empty'}
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addCellAtContextMenu}>
-        Add cell here
-      </button>
-      <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; addRowAtSeparator(); }}>
-        Add row above
-      </button>
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowBelow}>
-        Add row below
-      </button>
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; deleteRow(); }}>
-        Delete this row
-      </button>
-    {:else if contextMenu.type === 'rowSep'}
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowAtSeparator}>
-        Add row here
-      </button>
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteRow}>
-        Delete row
-      </button>
-    {:else if contextMenu.type === 'noRow'}
-      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowAtPosition}>
-        Add row here
-      </button>
-    {/if}
-  </div>
-{/if}
+<ContextMenu
+  bind:contextMenu
+  onchangelabel={promptChangeLabel}
+  onrelabel={promptRelabel}
+  onsplitcell={splitCell}
+  ondeletecell={deleteCell}
+  onaddcell={addCellAtContextMenu}
+  onaddrowatseparator={addRowAtSeparator}
+  onaddrowbelow={addRowBelow}
+  ondeleterow={deleteRow}
+  onaddrowatposition={addRowAtPosition}
+/>

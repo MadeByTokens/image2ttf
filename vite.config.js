@@ -13,5 +13,8 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     svelte()
-  ]
+  ],
+  build: {
+    sourcemap: true
+  }
 });

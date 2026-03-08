@@ -1,5 +1,6 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
+  import { ImageLoadError } from '../lib/errors.js';
 
   let dragOver = $state(false);
   let fileInput;
@@ -26,7 +27,7 @@
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (PNG, JPG, etc.)');
+      setError(new ImageLoadError('Please upload an image file (PNG, JPG, etc.)').message);
       return;
     }
 

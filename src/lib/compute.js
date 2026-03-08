@@ -3,7 +3,12 @@
  * Provides async API with abort support.
  * Falls back to main-thread execution if workers are unavailable.
  */
-import { autoDetectGrid, detectColumns, cropCell } from './segmentation.js';
+import { autoDetectGrid, cropCell } from './segmentation.js';
+import { redetectColumnsForRows } from './redetect-columns.js';
+import { createLogger } from './logger.js';
+import { GridDetectionError, TracingError } from './errors.js';
+
+const logger = createLogger('compute');
 
 let worker = null;
 let nextId = 0;
@@ -40,7 +45,8 @@ function getWorker() {
         }
         pending.clear();
       };
-    } catch {
+    } catch (err) {
+      logger.warn('Worker creation failed:', err);
       workerFailed = true;
       return null;
     }
@@ -84,9 +90,13 @@ export async function detectGridAsync(canvas, opts = {}) {
   } catch (err) {
     if (err.message === 'Aborted') throw err;
     // Fallback to main thread
-    console.warn('Worker fallback for detectGrid:', err.message);
-    const freshData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    return autoDetectGrid(freshData, opts);
+    logger.warn('Worker fallback for detectGrid:', err.message);
+    try {
+      const freshData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return autoDetectGrid(freshData, opts);
+    } catch (fallbackErr) {
+      throw new GridDetectionError(fallbackErr.message || 'Grid detection failed on main thread');
+    }
   }
 }
 
@@ -105,28 +115,9 @@ export async function redetectColumnsAsync(canvas, rows, opts = {}) {
   } catch (err) {
     if (err.message === 'Aborted') throw err;
     // Fallback to main thread
-    console.warn('Worker fallback for redetectColumns:', err.message);
+    logger.warn('Worker fallback for redetectColumns:', err.message);
     const freshData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const newCells = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row.baseline == null) {
-        row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
-      }
-      const clipTop = i > 0
-        ? Math.round((rows[i - 1].baseline + row.baseline) / 2)
-        : row.start;
-      const clipBottom = i < rows.length - 1
-        ? Math.round((row.baseline + rows[i + 1].baseline) / 2)
-        : row.end;
-      const cols = detectColumns(freshData, { start: clipTop, end: clipBottom }, opts);
-      newCells.push(cols.map(col => ({
-        x: col.start, y: row.start,
-        w: col.end - col.start, h: row.end - row.start,
-        baseline: row.baseline
-      })));
-    }
-    return { rows, cells: newCells };
+    return redetectColumnsForRows(freshData, rows, opts);
   }
 }
 
@@ -146,7 +137,7 @@ export async function generateThumbnailsAsync(canvas, cells, charMap, onProgress
   } catch (err) {
     if (err.message === 'Aborted') throw err;
     // Fallback to main thread
-    console.warn('Worker fallback for generateThumbnails:', err.message);
+    logger.warn('Worker fallback for generateThumbnails:', err.message);
     const flatCells = cells.flat();
     const thumbs = [];
     for (let i = 0; i < flatCells.length && i < charMap.length; i++) {
@@ -158,7 +149,8 @@ export async function generateThumbnailsAsync(canvas, cells, charMap, onProgress
           imageData: cropped.empty ? null : cropped.imageData,
           index: i
         });
-      } catch {
+      } catch (err) {
+        logger.warn('Thumbnail fallback for cell', i, ':', err);
         thumbs.push({ char: charMap[i], empty: true, imageData: null, index: i });
       }
     }
@@ -190,8 +182,12 @@ export async function runTracingAsync(canvas, cells, charMap, opts = {}, onProgr
   } catch (err) {
     if (err.message === 'Aborted') throw err;
     // Fallback to main-thread pipeline
-    console.warn('Worker fallback for tracing:', err.message);
-    const { runTracing } = await import('./pipeline.js');
-    return runTracing(cells, charMap, canvas, onProgress, opts);
+    logger.warn('Worker fallback for tracing:', err.message);
+    try {
+      const { runTracing } = await import('./pipeline.js');
+      return runTracing(cells, charMap, canvas, onProgress, opts);
+    } catch (fallbackErr) {
+      throw new TracingError(fallbackErr.message || 'Tracing failed on main thread');
+    }
   }
 }

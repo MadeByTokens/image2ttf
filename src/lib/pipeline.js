@@ -1,6 +1,8 @@
-import { cropCell } from './segmentation.js';
-import { traceGlyph, svgPathToOpentypePath, cleanupPaths, smoothnessToOpts } from './tracing.js';
-import { EM_SQUARE } from './constants.js';
+import { smoothnessToOpts } from './tracing.js';
+import { createLogger } from './logger.js';
+import { traceCell, computeSpaceWidth } from './glyph-utils.js';
+
+const logger = createLogger('pipeline');
 
 /**
  * Run the full tracing pipeline for all grid cells
@@ -18,6 +20,7 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
   // Use a single reference height (max row height) for uniform scaling across all rows.
   // This ensures uppercase and lowercase maintain correct relative sizes.
   const refHeight = Math.max(...flatCells.map(c => c.h));
+  const tracingOpts = opts.smoothness != null ? smoothnessToOpts(opts.smoothness) : {};
 
   for (let i = 0; i < total; i++) {
     const cell = flatCells[i];
@@ -26,42 +29,12 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
     if (!char || char === ' ') continue;
 
     try {
-      const cropped = cropCell(sourceCanvas, cell);
-
-      if (cropped.empty) {
-        continue;
-      }
-
-      const tracingOpts = opts.smoothness != null ? smoothnessToOpts(opts.smoothness) : {};
-      const svgPaths = traceGlyph(cropped.imageData, tracingOpts);
-
-      if (svgPaths.length === 0) continue;
-
-      // Use refHeight for all glyphs so scaling is uniform across rows
-      const commands = svgPathToOpentypePath(
-        svgPaths,
-        cropped.imageData.width,
-        cropped.imageData.height,
-        EM_SQUARE,
-        { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y + (cell.h < refHeight ? 0 : 0) }
-      );
-
-      const cleaned = cleanupPaths(commands);
-
-      if (cleaned.length > 0) {
-        let minX = Infinity, maxX = -Infinity;
-        for (const cmd of cleaned) {
-          if (cmd.x !== undefined) {
-            minX = Math.min(minX, cmd.x);
-            maxX = Math.max(maxX, cmd.x);
-          }
-        }
-        const width = maxX > minX ? maxX - minX + EM_SQUARE * 0.15 : EM_SQUARE * 0.5;
-
-        glyphMap.set(char, { commands: cleaned, width: Math.min(width, EM_SQUARE) });
+      const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts);
+      if (result) {
+        glyphMap.set(char, result);
       }
     } catch (err) {
-      console.warn(`Failed to trace glyph for "${char}":`, err);
+      logger.warn(`Failed to trace glyph for "${char}":`, err);
     }
 
     if (i % 3 === 0) {
@@ -73,16 +46,8 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
   }
 
   // Auto-generate space width from average lowercase advance width
-  const spacePercent = (opts.spaceWidthPercent ?? 60) / 100;
-  const lowercaseWidths = [];
-  for (const [char, data] of glyphMap) {
-    if (char >= 'a' && char <= 'z') {
-      lowercaseWidths.push(data.width);
-    }
-  }
-  const spaceWidth = lowercaseWidths.length > 0
-    ? Math.round(lowercaseWidths.reduce((s, w) => s + w, 0) / lowercaseWidths.length * spacePercent)
-    : Math.round(EM_SQUARE * 0.3 * spacePercent / 0.6);
+  const entries = [...glyphMap.entries()].map(([char, data]) => ({ char, width: data.width }));
+  const spaceWidth = computeSpaceWidth(entries, opts.spaceWidthPercent ?? 60);
   glyphMap.set(' ', { commands: [], width: spaceWidth });
 
   onProgress(total, total);

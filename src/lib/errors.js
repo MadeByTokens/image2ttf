@@ -30,16 +30,3 @@ export class FontBuildError extends Error {
   }
 }
 
-/**
- * Wrap an async operation with error handling and user-friendly messages
- */
-export function withErrorHandling(fn, ErrorClass = Error) {
-  return async (...args) => {
-    try {
-      return await fn(...args);
-    } catch (err) {
-      if (err instanceof ErrorClass) throw err;
-      throw new ErrorClass(err.message || String(err));
-    }
-  };
-}

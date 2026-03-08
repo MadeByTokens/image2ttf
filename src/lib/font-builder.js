@@ -1,5 +1,6 @@
 import opentype from 'opentype.js';
 import { EM_SQUARE, ASCENDER, DESCENDER } from './constants.js';
+import { FontBuildError } from './errors.js';
 
 /**
  * Build a single opentype.Glyph from path commands
@@ -41,6 +42,15 @@ export function buildGlyph(char, pathCommands, advanceWidth = EM_SQUARE * 0.6) {
  * @param {object} options - font metadata
  */
 export function createFont(glyphMap, options = {}) {
+  try {
+    return _createFontInner(glyphMap, options);
+  } catch (err) {
+    if (err instanceof FontBuildError) throw err;
+    throw new FontBuildError(err.message || 'Unknown font build error');
+  }
+}
+
+function _createFontInner(glyphMap, options = {}) {
   const {
     familyName = 'MyHandwriting',
     styleName = 'Regular',
