@@ -520,6 +520,49 @@
     drawOverlay();
   }
 
+  /** Add a new row below the current row (splits space below it) */
+  function addRowBelow() {
+    if (!contextMenu) return;
+    const { rowIdx } = contextMenu;
+    const rows = appState.grid.rows;
+    const cells = appState.grid.cells;
+    const imgH = appState.imageCanvas.height;
+
+    const currentRow = rows[rowIdx];
+    const nextStart = rowIdx + 1 < rows.length ? rows[rowIdx + 1].start : imgH;
+    const gap = nextStart - currentRow.end;
+
+    let newStart, newEnd;
+    if (gap > 20) {
+      // There's space between rows — use it
+      newStart = currentRow.end;
+      newEnd = nextStart;
+    } else {
+      // No gap — split the current row's bottom half
+      const midY = Math.round((currentRow.start + currentRow.end) / 2);
+      newEnd = currentRow.end;
+      newStart = midY;
+      currentRow.end = midY;
+      for (const c of cells[rowIdx]) {
+        c.h = midY - c.y;
+      }
+    }
+
+    const newRow = { start: newStart, end: newEnd };
+    // Copy column structure from current row
+    const newCells = cells[rowIdx].map(c => ({
+      x: c.x, y: newStart, w: c.w, h: newEnd - newStart
+    }));
+
+    rows.splice(rowIdx + 1, 0, newRow);
+    cells.splice(rowIdx + 1, 0, newCells);
+
+    appState.grid = { ...appState.grid };
+    resyncCharMap();
+    contextMenu = null;
+    drawOverlay();
+  }
+
   /** Delete a row and all its cells */
   function deleteRow() {
     if (!contextMenu) return;
@@ -858,6 +901,12 @@
         Add cell here
       </button>
       <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; addRowAtSeparator(); }}>
+        Add row above
+      </button>
+      <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={addRowBelow}>
+        Add row below
+      </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; deleteRow(); }}>
         Delete this row
       </button>

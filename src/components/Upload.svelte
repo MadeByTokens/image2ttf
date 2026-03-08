@@ -1,24 +1,26 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
-  import { onMount } from 'svelte';
 
   let dragOver = $state(false);
   let fileInput;
   let currentObjectUrl = null;
 
-  // Pan/zoom/rotate state
+  // View state
   let viewerEl = $state(null);
   let panX = $state(0);
   let panY = $state(0);
   let zoom = $state(1);
   let rotation = $state(0);
-  let isPanning = $state(false);
-  let panStart = { x: 0, y: 0 };
-  let panOrigin = { x: 0, y: 0 };
 
-  // Pinch tracking
-  let activePointers = new Map();
-  let lastPinchDist = 0;
+  // Interaction mode: 'pan' | 'rotate' | 'zoom'
+  let mode = $state('pan');
+  let dragging = $state(false);
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOriginPanX = 0;
+  let dragOriginPanY = 0;
+  let dragOriginZoom = 1;
+  let dragOriginRotation = 0;
 
   function handleFile(file) {
     if (!file) return;
@@ -66,13 +68,11 @@
     ctx.rotate(rad);
     ctx.drawImage(img, -w / 2, -h / 2);
     appState.imageCanvas = canvas;
-    // Reset grid when image changes
     appState.grid = null;
     appState.glyphPaths = null;
   }
 
-  function rotate(deg) {
-    rotation = (rotation + deg) % 360;
+  function commitRotation() {
     if (appState.uploadedImage) {
       applyTransformToCanvas(appState.uploadedImage, rotation);
     }
@@ -82,54 +82,47 @@
     panX = 0;
     panY = 0;
     zoom = 1;
+    rotation = 0;
+    commitRotation();
   }
 
-  // --- Pointer events for pan (mouse + touch) ---
+  // --- Pointer events (unified mouse + touch) ---
   function onPointerDown(e) {
     if (!appState.uploadedImage) return;
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     viewerEl?.setPointerCapture(e.pointerId);
-
-    if (activePointers.size === 1) {
-      isPanning = true;
-      panStart = { x: e.clientX, y: e.clientY };
-      panOrigin = { x: panX, y: panY };
-    } else if (activePointers.size === 2) {
-      isPanning = false;
-      const pts = [...activePointers.values()];
-      lastPinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-    }
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragOriginPanX = panX;
+    dragOriginPanY = panY;
+    dragOriginZoom = zoom;
+    dragOriginRotation = rotation;
   }
 
   function onPointerMove(e) {
-    if (!appState.uploadedImage) return;
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!dragging || !appState.uploadedImage) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
 
-    if (activePointers.size === 1 && isPanning) {
-      panX = panOrigin.x + (e.clientX - panStart.x);
-      panY = panOrigin.y + (e.clientY - panStart.y);
-    } else if (activePointers.size === 2) {
-      const pts = [...activePointers.values()];
-      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-      if (lastPinchDist > 0) {
-        const scale = dist / lastPinchDist;
-        zoom = Math.max(0.25, Math.min(5, zoom * scale));
-      }
-      lastPinchDist = dist;
+    if (mode === 'pan') {
+      panX = dragOriginPanX + dx;
+      panY = dragOriginPanY + dy;
+    } else if (mode === 'rotate') {
+      // Horizontal drag: ~1 degree per 2 pixels
+      rotation = dragOriginRotation + dx * 0.5;
+    } else if (mode === 'zoom') {
+      // Vertical drag: drag up to zoom in, down to zoom out
+      const factor = Math.pow(1.005, -dy);
+      zoom = Math.max(0.25, Math.min(5, dragOriginZoom * factor));
     }
   }
 
   function onPointerUp(e) {
-    activePointers.delete(e.pointerId);
-    if (activePointers.size === 0) {
-      isPanning = false;
-    } else if (activePointers.size === 1) {
-      // Reset pan start to remaining pointer
-      const pt = [...activePointers.values()][0];
-      panStart = { x: pt.x, y: pt.y };
-      panOrigin = { x: panX, y: panY };
-      isPanning = true;
-      lastPinchDist = 0;
+    if (!dragging) return;
+    dragging = false;
+    // Commit rotation to canvas when done dragging in rotate mode
+    if (mode === 'rotate' && Math.abs(rotation - dragOriginRotation) > 0.5) {
+      commitRotation();
     }
   }
 
@@ -171,6 +164,12 @@
       setError('Could not load example image: ' + err.message);
     }
   }
+
+  const cursorClass = $derived(
+    mode === 'pan' ? (dragging ? 'cursor-grabbing' : 'cursor-grab') :
+    mode === 'rotate' ? 'cursor-ew-resize' :
+    'cursor-ns-resize'
+  );
 </script>
 
 <div class="flex flex-col items-center gap-6">
@@ -214,37 +213,32 @@
       <p class="text-xs text-gray-400">PNG, JPG, or WebP</p>
     </div>
   {:else}
-    <!-- Image viewer with pan/zoom/rotate -->
+    <!-- Image viewer with mode-based interaction -->
     <div class="w-full max-w-3xl flex flex-col items-center gap-3">
-      <!-- Controls -->
+      <!-- Mode toggle + actions -->
       <div class="flex flex-wrap items-center gap-2">
-        <button
-          onclick={() => rotate(-90)}
-          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
-                 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Rotate 90° counter-clockwise"
-        >Rotate Left</button>
-        <button
-          onclick={() => rotate(90)}
-          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
-                 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Rotate 90° clockwise"
-        >Rotate Right</button>
-        <button
-          onclick={() => { zoom = Math.min(5, zoom * 1.3); }}
-          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
-                 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Zoom In</button>
-        <button
-          onclick={() => { zoom = Math.max(0.25, zoom / 1.3); }}
-          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
-                 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Zoom Out</button>
+        <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+          <button
+            onclick={() => { mode = 'pan'; }}
+            class="px-3 py-1.5 text-sm transition-colors {mode === 'pan'
+              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          >Pan</button>
+          <button
+            onclick={() => { mode = 'rotate'; }}
+            class="px-3 py-1.5 text-sm transition-colors {mode === 'rotate'
+              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          >Rotate</button>
+          <button
+            onclick={() => { mode = 'zoom'; }}
+            class="px-3 py-1.5 text-sm transition-colors {mode === 'zoom'
+              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          >Zoom</button>
+        </div>
         <button
           onclick={resetView}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Reset View</button>
+        >Reset</button>
         <button
           onclick={() => fileInput.click()}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
@@ -253,14 +247,20 @@
       </div>
 
       <p class="text-xs text-gray-400 dark:text-gray-500">
-        Drag to pan. Scroll or pinch to zoom. {rotation !== 0 ? `Rotated ${rotation}°` : ''}
+        {#if mode === 'pan'}
+          Drag to move the image. Scroll to zoom.
+        {:else if mode === 'rotate'}
+          Drag left/right to rotate. Scroll to zoom.
+        {:else}
+          Drag up/down to zoom. Scroll also works.
+        {/if}
+        {rotation !== 0 ? ` Rotated ${Math.round(rotation)}°.` : ''}
       </p>
 
       <!-- Viewer -->
       <div
         bind:this={viewerEl}
-        class="w-full max-h-96 overflow-hidden border rounded-lg dark:border-gray-700 bg-gray-100 dark:bg-gray-900 cursor-grab touch-none select-none"
-        class:cursor-grabbing={isPanning}
+        class="w-full max-h-96 overflow-hidden border rounded-lg dark:border-gray-700 bg-gray-100 dark:bg-gray-900 touch-none select-none {cursorClass}"
         onpointerdown={onPointerDown}
         onpointermove={onPointerMove}
         onpointerup={onPointerUp}
