@@ -90,6 +90,51 @@ function countInk(mask) {
   return count;
 }
 
+/**
+ * Find the bounding box of ink pixels in a mask
+ */
+function inkBoundingBox(mask, w, h) {
+  let minX = w, minY = h, maxX = 0, maxY = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (mask[y * w + x]) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  if (maxX < minX) return null;
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/**
+ * Crop a mask to its ink bounding box
+ */
+function cropMask(mask, srcW, srcH) {
+  const bb = inkBoundingBox(mask, srcW, srcH);
+  if (!bb) return { mask: new Uint8Array(0), w: 0, h: 0 };
+  const cropped = new Uint8Array(bb.w * bb.h);
+  for (let y = 0; y < bb.h; y++) {
+    for (let x = 0; x < bb.w; x++) {
+      cropped[y * bb.w + x] = mask[(bb.y + y) * srcW + (bb.x + x)];
+    }
+  }
+  return { mask: cropped, w: bb.w, h: bb.h };
+}
+
+/**
+ * Normalize a mask: crop to ink bounding box, then resize to target size.
+ * This removes position/alignment differences so we compare shape only.
+ */
+function normalizeMask(imageData, targetSize, threshold = 128) {
+  const raw = toBinaryMask(imageData, threshold);
+  const { mask: cropped, w: cw, h: ch } = cropMask(raw, imageData.width, imageData.height);
+  if (cw === 0 || ch === 0) return null;
+  return resizeMask(cropped, cw, ch, targetSize, targetSize);
+}
+
 
 describeIfFontPng('End-to-end: font.png pipeline', () => {
   let imageData;
@@ -238,11 +283,12 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
     });
 
     it('rendered glyphs should visually resemble the source cells (IoU check)', () => {
-      const RENDER_SIZE = 64;
-      const MIN_IOU = 0.10; // Minimum acceptable IoU (tracing + rasterization introduces loss)
+      const NORM_SIZE = 32; // Normalize both to 32x32 bounding-box crops
+      const MIN_IOU = 0.20;
       const flatCells = grid.cells.flat();
       let checked = 0;
       let passed = 0;
+      let totalIoU = 0;
       const failures = [];
 
       for (let i = 0; i < Math.min(flatCells.length, charMap.length); i++) {
@@ -253,27 +299,22 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
         const cropped = cropCell(sourceCanvas, cell);
         if (cropped.empty) continue;
 
-        // Get source mask
-        const sourceMask = toBinaryMask(cropped.imageData, 128);
-        const srcW = cropped.imageData.width;
-        const srcH = cropped.imageData.height;
-        const sourceResized = resizeMask(sourceMask, srcW, srcH, RENDER_SIZE, RENDER_SIZE);
-
-        // If source has almost no ink, skip (probably a detection artifact)
-        if (countInk(sourceResized) < 5) continue;
+        // Normalize source: crop to ink bbox, resize to NORM_SIZE
+        const sourceNorm = normalizeMask(cropped.imageData, NORM_SIZE);
+        if (!sourceNorm || countInk(sourceNorm) < 3) continue;
 
         // Render glyph from font
         const glyph = parsedFont.charToGlyph(char);
-        const rendered = rasterizeGlyph(glyph, RENDER_SIZE);
+        const rendered = rasterizeGlyph(glyph, 64);
         if (!rendered) continue;
 
-        const renderedMask = toBinaryMask(rendered, 128);
+        // Normalize rendered: crop to ink bbox, resize to NORM_SIZE
+        const renderedNorm = normalizeMask(rendered, NORM_SIZE);
+        if (!renderedNorm || countInk(renderedNorm) < 2) continue;
 
-        // Both should have some ink
-        if (countInk(renderedMask) < 2) continue;
-
-        const iou = computeIoU(sourceResized, renderedMask);
+        const iou = computeIoU(sourceNorm, renderedNorm);
         checked++;
+        totalIoU += iou;
 
         if (iou >= MIN_IOU) {
           passed++;
@@ -282,7 +323,6 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
         }
       }
 
-      // Report failures for debugging
       if (failures.length > 0) {
         console.warn(
           `IoU failures (${failures.length}/${checked}):`,
@@ -290,47 +330,15 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
         );
       }
 
-      // At least 50% of checked glyphs should pass the IoU threshold
+      const avgIoU = checked > 0 ? totalIoU / checked : 0;
+      console.log(`Average IoU across ${checked} glyphs: ${avgIoU.toFixed(3)} (bbox-normalized ${NORM_SIZE}x${NORM_SIZE})`);
+
+      // At least 60% of glyphs should pass the per-glyph threshold
       const passRate = checked > 0 ? passed / checked : 0;
-      expect(passRate, `Only ${passed}/${checked} glyphs passed IoU >= ${MIN_IOU}`).toBeGreaterThan(0.5);
-    });
+      expect(passRate, `Only ${passed}/${checked} glyphs passed IoU >= ${MIN_IOU}`).toBeGreaterThan(0.6);
 
-    it('average IoU across all glyphs should exceed minimum quality', () => {
-      const RENDER_SIZE = 64;
-      const flatCells = grid.cells.flat();
-      let totalIoU = 0;
-      let count = 0;
-
-      for (let i = 0; i < Math.min(flatCells.length, charMap.length); i++) {
-        const char = charMap[i];
-        if (!char || char === ' ' || !glyphMap.has(char)) continue;
-
-        const cell = flatCells[i];
-        const cropped = cropCell(sourceCanvas, cell);
-        if (cropped.empty) continue;
-
-        const sourceMask = toBinaryMask(cropped.imageData, 128);
-        const srcW = cropped.imageData.width;
-        const srcH = cropped.imageData.height;
-        const sourceResized = resizeMask(sourceMask, srcW, srcH, RENDER_SIZE, RENDER_SIZE);
-        if (countInk(sourceResized) < 5) continue;
-
-        const glyph = parsedFont.charToGlyph(char);
-        const rendered = rasterizeGlyph(glyph, RENDER_SIZE);
-        if (!rendered) continue;
-
-        const renderedMask = toBinaryMask(rendered, 128);
-        if (countInk(renderedMask) < 2) continue;
-
-        totalIoU += computeIoU(sourceResized, renderedMask);
-        count++;
-      }
-
-      const avgIoU = count > 0 ? totalIoU / count : 0;
-      console.log(`Average IoU across ${count} glyphs: ${avgIoU.toFixed(3)}`);
-
-      // Average IoU should be at least 0.15 (accounting for tracing/rasterization loss)
-      expect(avgIoU).toBeGreaterThan(0.15);
+      // Average IoU should be meaningful now that we're comparing shapes
+      expect(avgIoU).toBeGreaterThan(0.30);
     });
   });
 });

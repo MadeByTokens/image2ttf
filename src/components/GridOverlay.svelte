@@ -1,26 +1,42 @@
 <script>
   import { appState, setError, resyncCharMap } from '../lib/store.svelte.js';
   import { autoDetectGrid } from '../lib/segmentation.js';
-  import { DEFAULT_CHARSET } from '../lib/constants.js';
+  import { DEFAULT_CHARSET, DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
 
   let canvasEl = $state(null);
   let containerEl = $state(null);
   let displayScale = 1;
   let mode = $state('auto'); // 'auto' | 'edit'
-  let selectedCell = $state(null); // { rowIdx, colIdx }
-  let dragState = $state(null); // { rowIdx, colIdx, edge, startX, startY, origRect }
-  let contextMenu = $state(null); // { x, y, rowIdx, colIdx }
+  let selectedCell = $state(null);
+  let dragState = $state(null);
+  let contextMenu = $state(null);
+  let showAdvanced = $state(false);
+
+  // Advanced parameters (editable copies of constants)
+  let darkThreshold = $state(DARK_PIXEL_THRESHOLD);
+  let rowDensity = $state(ROW_DENSITY_THRESHOLD);
+  let colDensity = $state(COL_DENSITY_THRESHOLD);
+  let minRowH = $state(MIN_ROW_HEIGHT);
+  let minColW = $state(MIN_COL_WIDTH);
+  let gapFraction = $state(MIN_GAP_FRACTION);
 
   function runDetection() {
     if (!appState.imageCanvas) return;
     try {
       const ctx = appState.imageCanvas.getContext('2d');
       const imageData = ctx.getImageData(0, 0, appState.imageCanvas.width, appState.imageCanvas.height);
-      const grid = autoDetectGrid(imageData);
+      const grid = autoDetectGrid(imageData, {
+        darkPixelThreshold: darkThreshold,
+        rowDensityThreshold: rowDensity,
+        colDensityThreshold: colDensity,
+        minRowHeight: minRowH,
+        minColWidth: minColW,
+        minGapFraction: gapFraction
+      });
 
       if (grid.cells.length === 0) {
-        setError('Could not detect character rows. Try adjusting the image.');
+        setError('Could not detect character rows. Try adjusting the image or parameters.');
         return;
       }
 
@@ -80,7 +96,6 @@
     appState.grid = { rows, cells };
     const totalCells = numRows * numCols;
     appState.charMap = DEFAULT_CHARSET.slice(0, totalCells);
-    // Pad with '?' if charset is too small
     while (appState.charMap.length < totalCells) {
       appState.charMap.push('?');
     }
@@ -105,7 +120,6 @@
 
     const cells = appState.grid.cells;
 
-    // Draw cell rectangles
     let charIdx = 0;
     for (let ri = 0; ri < cells.length; ri++) {
       for (let ci = 0; ci < cells[ri].length; ci++) {
@@ -130,7 +144,6 @@
           cell.w * displayScale, cell.h * displayScale
         );
 
-        // Draw label
         if (charIdx < appState.charMap.length) {
           ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.95)' : 'rgba(79, 70, 229, 0.9)';
           ctx.font = `${Math.max(10, 12 * displayScale)}px monospace`;
@@ -146,8 +159,6 @@
   }
 
   $effect(() => {
-    // Track only grid and canvas; untrack drawOverlay to avoid loops
-    // from reading selectedCell/displayScale inside it
     const grid = appState.grid;
     const canvas = canvasEl;
     if (grid && canvas) {
@@ -183,21 +194,17 @@
       for (let ci = 0; ci < cells[ri].length; ci++) {
         const c = cells[ri][ci];
         if (imgY >= c.y - hitZone && imgY <= c.y + c.h + hitZone) {
-          // Right edge
           if (Math.abs(imgX - (c.x + c.w)) < hitZone && imgY >= c.y && imgY <= c.y + c.h) {
             return { rowIdx: ri, colIdx: ci, edge: 'right' };
           }
-          // Left edge
           if (Math.abs(imgX - c.x) < hitZone && imgY >= c.y && imgY <= c.y + c.h) {
             return { rowIdx: ri, colIdx: ci, edge: 'left' };
           }
         }
         if (imgX >= c.x - hitZone && imgX <= c.x + c.w + hitZone) {
-          // Bottom edge
           if (Math.abs(imgY - (c.y + c.h)) < hitZone && imgX >= c.x && imgX <= c.x + c.w) {
             return { rowIdx: ri, colIdx: ci, edge: 'bottom' };
           }
-          // Top edge
           if (Math.abs(imgY - c.y) < hitZone && imgX >= c.x && imgX <= c.x + c.w) {
             return { rowIdx: ri, colIdx: ci, edge: 'top' };
           }
@@ -228,12 +235,7 @@
     const edgeHit = getEdgeAt(cx, cy);
     if (edgeHit) {
       const cell = appState.grid.cells[edgeHit.rowIdx][edgeHit.colIdx];
-      dragState = {
-        ...edgeHit,
-        startX: cx,
-        startY: cy,
-        origRect: { ...cell }
-      };
+      dragState = { ...edgeHit, startX: cx, startY: cy, origRect: { ...cell } };
       e.preventDefault();
       return;
     }
@@ -261,34 +263,17 @@
       const cell = appState.grid.cells[dragState.rowIdx][dragState.colIdx];
       const orig = dragState.origRect;
 
-      if (dragState.edge === 'right') {
-        cell.w = Math.max(5, orig.w + dx);
-      } else if (dragState.edge === 'left') {
-        const newX = orig.x + dx;
-        const newW = orig.w - dx;
-        if (newW > 5) {
-          cell.x = newX;
-          cell.w = newW;
-        }
-      } else if (dragState.edge === 'bottom') {
-        cell.h = Math.max(5, orig.h + dy);
-      } else if (dragState.edge === 'top') {
-        const newY = orig.y + dy;
-        const newH = orig.h - dy;
-        if (newH > 5) {
-          cell.y = newY;
-          cell.h = newH;
-        }
-      }
+      if (dragState.edge === 'right') cell.w = Math.max(5, orig.w + dx);
+      else if (dragState.edge === 'left') { const nw = orig.w - dx; if (nw > 5) { cell.x = orig.x + dx; cell.w = nw; } }
+      else if (dragState.edge === 'bottom') cell.h = Math.max(5, orig.h + dy);
+      else if (dragState.edge === 'top') { const nh = orig.h - dy; if (nh > 5) { cell.y = orig.y + dy; cell.h = nh; } }
       drawOverlay();
       return;
     }
 
-    // Update cursor based on hover
     const edgeHit = getEdgeAt(cx, cy);
     if (edgeHit) {
-      canvasEl.style.cursor = (edgeHit.edge === 'left' || edgeHit.edge === 'right')
-        ? 'col-resize' : 'row-resize';
+      canvasEl.style.cursor = (edgeHit.edge === 'left' || edgeHit.edge === 'right') ? 'col-resize' : 'row-resize';
     } else {
       canvasEl.style.cursor = getCellAt(cx, cy) ? 'pointer' : 'default';
     }
@@ -297,7 +282,6 @@
   function handleCanvasMouseUp() {
     if (dragState) {
       dragState = null;
-      // Grid was mutated in-place, trigger reactivity
       appState.grid = { ...appState.grid };
     }
   }
@@ -309,10 +293,8 @@
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
 
-    // If double-clicking an existing cell, ignore
     if (getCellAt(cx, cy)) return;
 
-    // Find which row we're in
     const ri = getRowAt(cx, cy);
     if (ri < 0) return;
 
@@ -320,19 +302,14 @@
     const row = appState.grid.rows[ri];
     const rowCells = appState.grid.cells[ri];
 
-    // Compute average cell width for this row
     const avgW = rowCells.length > 0
-      ? rowCells.reduce((s, c) => s + c.w, 0) / rowCells.length
-      : 40;
+      ? rowCells.reduce((s, c) => s + c.w, 0) / rowCells.length : 40;
 
     const newCell = {
       x: Math.max(0, imgX - avgW / 2),
-      y: row.start,
-      w: avgW,
-      h: row.end - row.start
+      y: row.start, w: avgW, h: row.end - row.start
     };
 
-    // Insert in sorted order by x
     let insertIdx = rowCells.findIndex(c => c.x > newCell.x);
     if (insertIdx === -1) insertIdx = rowCells.length;
     rowCells.splice(insertIdx, 0, newCell);
@@ -364,11 +341,7 @@
     const cells = appState.grid.cells[rowIdx];
     const cell = cells[colIdx];
     const halfW = cell.w / 2;
-
-    const left = { x: cell.x, y: cell.y, w: halfW, h: cell.h };
-    const right = { x: cell.x + halfW, y: cell.y, w: halfW, h: cell.h };
-
-    cells.splice(colIdx, 1, left, right);
+    cells.splice(colIdx, 1, { x: cell.x, y: cell.y, w: halfW, h: cell.h }, { x: cell.x + halfW, y: cell.y, w: halfW, h: cell.h });
     appState.grid = { ...appState.grid };
     resyncCharMap();
     contextMenu = null;
@@ -387,11 +360,6 @@
     drawOverlay();
   }
 
-  function closeContextMenu() {
-    contextMenu = null;
-  }
-
-  // Close context menu on any outside click
   function handleWindowClick() {
     if (contextMenu) contextMenu = null;
   }
@@ -403,15 +371,9 @@
     const cell = appState.grid.cells[selectedCell.rowIdx]?.[selectedCell.colIdx];
     if (!cell) return null;
     let idx = 0;
-    for (let r = 0; r < selectedCell.rowIdx; r++) {
-      idx += appState.grid.cells[r].length;
-    }
+    for (let r = 0; r < selectedCell.rowIdx; r++) idx += appState.grid.cells[r].length;
     idx += selectedCell.colIdx;
-    return {
-      char: appState.charMap[idx] || '?',
-      w: Math.round(cell.w),
-      h: Math.round(cell.h)
-    };
+    return { char: appState.charMap[idx] || '?', w: Math.round(cell.w), h: Math.round(cell.h) };
   });
 </script>
 
@@ -429,33 +391,83 @@
       onclick={applyUniformGrid}
       class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-    >
-      Uniform Grid
-    </button>
+    >Uniform Grid</button>
     <button
       onclick={runDetection}
       class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-    >
-      Re-detect
-    </button>
+    >Re-detect</button>
     <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
       <button
         onclick={() => { mode = 'auto'; selectedCell = null; contextMenu = null; drawOverlay(); }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'auto'
           ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-      >
-        Auto
-      </button>
+      >Auto</button>
       <button
         onclick={() => { mode = 'edit'; }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'edit'
           ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-      >
-        Edit
-      </button>
+      >Edit</button>
     </div>
+    <button
+      onclick={() => { showAdvanced = !showAdvanced; }}
+      class="px-3 py-1.5 text-sm rounded-lg border transition-colors
+             {showAdvanced
+               ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+               : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+    >Advanced</button>
   </div>
+
+  <!-- Advanced parameters panel -->
+  {#if showAdvanced}
+    <div class="w-full max-w-3xl border rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Tweak detection parameters and click Re-detect to apply.
+      </p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Dark pixel threshold</span>
+          <input type="range" min="20" max="200" bind:value={darkThreshold} class="w-full" />
+          <span class="text-xs text-gray-400 text-center">{darkThreshold}</span>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Row density</span>
+          <input type="range" min="0.001" max="0.1" step="0.001" bind:value={rowDensity} class="w-full" />
+          <span class="text-xs text-gray-400 text-center">{rowDensity.toFixed(3)}</span>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Column density</span>
+          <input type="range" min="0.0005" max="0.05" step="0.0005" bind:value={colDensity} class="w-full" />
+          <span class="text-xs text-gray-400 text-center">{colDensity.toFixed(4)}</span>
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Min row height</span>
+          <input type="number" min="3" max="100" bind:value={minRowH}
+                 class="px-2 py-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 w-full" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Min col width</span>
+          <input type="number" min="1" max="50" bind:value={minColW}
+                 class="px-2 py-1 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 w-full" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-gray-600 dark:text-gray-300">Gap fraction</span>
+          <input type="range" min="0.01" max="0.5" step="0.01" bind:value={gapFraction} class="w-full" />
+          <span class="text-xs text-gray-400 text-center">{gapFraction.toFixed(2)}</span>
+        </label>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button
+          onclick={runDetection}
+          class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+        >Apply & Re-detect</button>
+        <button
+          onclick={() => { darkThreshold = DARK_PIXEL_THRESHOLD; rowDensity = ROW_DENSITY_THRESHOLD; colDensity = COL_DENSITY_THRESHOLD; minRowH = MIN_ROW_HEIGHT; minColW = MIN_COL_WIDTH; gapFraction = MIN_GAP_FRACTION; }}
+          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >Reset defaults</button>
+      </div>
+    </div>
+  {/if}
 
   {#if appState.grid}
     <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -503,16 +515,10 @@
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => { if (e.key === 'Escape') contextMenu = null; }}
   >
-    <button
-      class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-      onclick={splitCell}
-    >
+    <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={splitCell}>
       Split cell
     </button>
-    <button
-      class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
-      onclick={deleteCell}
-    >
+    <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={deleteCell}>
       Delete cell
     </button>
   </div>

@@ -97,19 +97,99 @@ function mergeCloseRuns(runs, minGap) {
 }
 
 /**
+ * Find the deepest valley (local minimum) in a projection slice.
+ * Returns the split point, or -1 if no good valley exists.
+ */
+function findValley(projection, start, end, minDepthRatio = 0.4) {
+  const slice = projection.slice(start, end);
+  const peak = Math.max(...slice);
+  if (peak === 0) return -1;
+
+  // Smooth the projection to avoid noise valleys
+  const smoothed = new Array(slice.length).fill(0);
+  const radius = Math.max(1, Math.floor(slice.length / 20));
+  for (let i = 0; i < slice.length; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - radius); j <= Math.min(slice.length - 1, i + radius); j++) {
+      sum += slice[j];
+      count++;
+    }
+    smoothed[i] = sum / count;
+  }
+
+  // Don't split near edges — only look at the middle 80%
+  const margin = Math.floor(slice.length * 0.1);
+  let minVal = Infinity;
+  let minIdx = -1;
+  for (let i = margin; i < slice.length - margin; i++) {
+    if (smoothed[i] < minVal) {
+      minVal = smoothed[i];
+      minIdx = i;
+    }
+  }
+
+  // Only split if the valley is deep enough relative to the peak
+  if (minIdx >= 0 && minVal < peak * (1 - minDepthRatio)) {
+    return start + minIdx;
+  }
+  return -1;
+}
+
+/**
+ * Recursively split rows by finding valleys in the horizontal projection.
+ * Handles cases where lined paper noise merges distinct text rows into one run.
+ */
+function splitRowsByValley(rows, hProj, minRowH = MIN_ROW_HEIGHT) {
+  const result = [];
+  for (const row of rows) {
+    const h = row.end - row.start;
+    // Only try splitting rows tall enough to contain two sub-rows
+    if (h >= minRowH * 2) {
+      const splitY = findValley(hProj, row.start, row.end);
+      if (splitY > 0 && splitY - row.start >= minRowH && row.end - splitY >= minRowH) {
+        // Recurse on each half in case there are multiple sub-rows
+        const upper = { start: row.start, end: splitY };
+        const lower = { start: splitY, end: row.end };
+        result.push(...splitRowsByValley([upper], hProj, minRowH));
+        result.push(...splitRowsByValley([lower], hProj, minRowH));
+        continue;
+      }
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+/**
  * Detect row boundaries in the image
  */
-export function detectRows(imageData) {
+export function detectRows(imageData, opts = {}) {
+  const {
+    darkPixelThreshold = DARK_PIXEL_THRESHOLD,
+    rowDensityThreshold = ROW_DENSITY_THRESHOLD,
+    minRowHeight = MIN_ROW_HEIGHT,
+    minGapFraction = MIN_GAP_FRACTION
+  } = opts;
   const { width } = imageData;
-  const hProj = horizontalProjection(imageData);
-  const threshold = width * ROW_DENSITY_THRESHOLD;
-  let rows = findRuns(hProj, threshold, MIN_ROW_HEIGHT);
+  const hProj = horizontalProjection(imageData, darkPixelThreshold);
+  const threshold = width * rowDensityThreshold;
+  let rows = findRuns(hProj, threshold, minRowHeight);
 
   // Merge rows that are very close (lined paper artifacts)
   if (rows.length > 0) {
     const avgHeight = rows.reduce((s, r) => s + (r.end - r.start), 0) / rows.length;
-    rows = mergeCloseRuns(rows, avgHeight * MIN_GAP_FRACTION);
+    rows = mergeCloseRuns(rows, avgHeight * minGapFraction);
   }
+
+  // Split rows that contain valleys (e.g. lined paper merges distinct text rows)
+  rows = splitRowsByValley(rows, hProj, minRowHeight);
+
+  // Filter out noise rows — require peak projection to exceed 2% of image width
+  const peakThreshold = width * 0.02;
+  rows = rows.filter(row => {
+    const peak = Math.max(...hProj.slice(row.start, row.end));
+    return peak >= peakThreshold;
+  });
 
   return rows;
 }
@@ -117,16 +197,22 @@ export function detectRows(imageData) {
 /**
  * Detect column boundaries within a single row
  */
-export function detectColumns(imageData, rowBound) {
-  const vProj = verticalProjection(imageData, rowBound.start, rowBound.end);
+export function detectColumns(imageData, rowBound, opts = {}) {
+  const {
+    darkPixelThreshold = DARK_PIXEL_THRESHOLD,
+    colDensityThreshold = COL_DENSITY_THRESHOLD,
+    minColWidth = MIN_COL_WIDTH,
+    minGapFraction = MIN_GAP_FRACTION
+  } = opts;
+  const vProj = verticalProjection(imageData, rowBound.start, rowBound.end, darkPixelThreshold);
   const rowHeight = rowBound.end - rowBound.start;
-  const threshold = rowHeight * COL_DENSITY_THRESHOLD;
-  let cols = findRuns(vProj, threshold, MIN_COL_WIDTH);
+  const threshold = rowHeight * colDensityThreshold;
+  let cols = findRuns(vProj, threshold, minColWidth);
 
   // Merge close columns
   if (cols.length > 0) {
     const avgWidth = cols.reduce((s, c) => s + (c.end - c.start), 0) / cols.length;
-    cols = mergeCloseRuns(cols, avgWidth * MIN_GAP_FRACTION);
+    cols = mergeCloseRuns(cols, avgWidth * minGapFraction);
   }
 
   return cols;
@@ -136,12 +222,12 @@ export function detectColumns(imageData, rowBound) {
  * Auto-detect the full grid of character cells
  * Returns { rows: [{start, end}], cells: [[{x, y, w, h}]] }
  */
-export function autoDetectGrid(imageData) {
-  const rows = detectRows(imageData);
+export function autoDetectGrid(imageData, opts = {}) {
+  const rows = detectRows(imageData, opts);
   const cells = [];
 
   for (const row of rows) {
-    const cols = detectColumns(imageData, row);
+    const cols = detectColumns(imageData, row, opts);
     const rowCells = cols.map(col => ({
       x: col.start,
       y: row.start,
