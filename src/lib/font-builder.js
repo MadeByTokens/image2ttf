@@ -70,11 +70,12 @@ export function createFont(glyphMap, options = {}) {
     path: notdefPath
   });
 
-  // Space glyph
+  // Space glyph — use width from glyphMap if available (computed from lowercase avg)
+  const spaceData = glyphMap.get(' ');
   const spaceGlyph = new opentype.Glyph({
     name: 'space',
     unicode: 32,
-    advanceWidth: unitsPerEm * 0.3,
+    advanceWidth: spaceData?.width || unitsPerEm * 0.3,
     path: new opentype.Path()
   });
 

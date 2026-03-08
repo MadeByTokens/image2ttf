@@ -10,10 +10,14 @@ import { EM_SQUARE } from './constants.js';
  * @param {function} onProgress - callback(current, total)
  * @returns {Promise<Map<string, {commands: Array, width: number}>>}
  */
-export async function runTracing(grid, charMap, sourceCanvas, onProgress = () => {}) {
+export async function runTracing(grid, charMap, sourceCanvas, onProgress = () => {}, opts = {}) {
   const glyphMap = new Map();
   const flatCells = grid.flat();
   const total = Math.min(flatCells.length, charMap.length);
+
+  // Use a single reference height (max row height) for uniform scaling across all rows.
+  // This ensures uppercase and lowercase maintain correct relative sizes.
+  const refHeight = Math.max(...flatCells.map(c => c.h));
 
   for (let i = 0; i < total; i++) {
     const cell = flatCells[i];
@@ -25,29 +29,25 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
       const cropped = cropCell(sourceCanvas, cell);
 
       if (cropped.empty) {
-        // Empty cell — skip
         continue;
       }
 
-      // Trace the cropped glyph
       const svgPaths = traceGlyph(cropped.imageData);
 
       if (svgPaths.length === 0) continue;
 
-      // Convert to opentype path commands, using cell height for uniform scaling
+      // Use refHeight for all glyphs so scaling is uniform across rows
       const commands = svgPathToOpentypePath(
         svgPaths,
         cropped.imageData.width,
         cropped.imageData.height,
         EM_SQUARE,
-        { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y }
+        { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y + (cell.h < refHeight ? 0 : 0) }
       );
 
-      // Clean up noise
       const cleaned = cleanupPaths(commands);
 
       if (cleaned.length > 0) {
-        // Calculate advance width based on glyph bounds
         let minX = Infinity, maxX = -Infinity;
         for (const cmd of cleaned) {
           if (cmd.x !== undefined) {
@@ -63,7 +63,6 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
       console.warn(`Failed to trace glyph for "${char}":`, err);
     }
 
-    // Yield to UI every few glyphs
     if (i % 3 === 0) {
       onProgress(i + 1, total);
       await new Promise(r =>
@@ -71,6 +70,19 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
       );
     }
   }
+
+  // Auto-generate space width from average lowercase advance width
+  const spacePercent = (opts.spaceWidthPercent ?? 60) / 100;
+  const lowercaseWidths = [];
+  for (const [char, data] of glyphMap) {
+    if (char >= 'a' && char <= 'z') {
+      lowercaseWidths.push(data.width);
+    }
+  }
+  const spaceWidth = lowercaseWidths.length > 0
+    ? Math.round(lowercaseWidths.reduce((s, w) => s + w, 0) / lowercaseWidths.length * spacePercent)
+    : Math.round(EM_SQUARE * 0.3 * spacePercent / 0.6);
+  glyphMap.set(' ', { commands: [], width: spaceWidth });
 
   onProgress(total, total);
   return glyphMap;

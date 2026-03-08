@@ -8,6 +8,7 @@ export const appState = $state({
   grid: null,                // { rows, cells } from autoDetectGrid
   charMap: [],               // flat array of characters
   glyphPaths: null,          // Map<string, {commands, width}>
+  spaceWidthPercent: 60,     // space width as % of avg lowercase width (0 = auto)
   fontName: 'MyHandwriting',
   generatedFont: null,       // opentype.Font object
   isProcessing: false,

@@ -34,7 +34,8 @@
         (current, total) => {
           appState.progress = current;
           appState.progressTotal = total;
-        }
+        },
+        { spaceWidthPercent: appState.spaceWidthPercent }
       );
 
       appState.glyphPaths = glyphMap;
@@ -111,7 +112,8 @@
         return;
       }
 
-      const commands = svgPathToOpentypePath(svgPaths, cropped.imageData.width, cropped.imageData.height, EM_SQUARE, { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y });
+      const refHeight = Math.max(...flatCells.map(c => c.h));
+      const commands = svgPathToOpentypePath(svgPaths, cropped.imageData.width, cropped.imageData.height, EM_SQUARE, { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y });
       const cleaned = cleanupPaths(commands);
       if (cleaned.length === 0) return;
 

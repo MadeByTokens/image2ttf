@@ -78,6 +78,24 @@
     {/each}
   </div>
 
+  <!-- Space width control -->
+  <div class="w-full max-w-sm flex flex-col items-center gap-1 mt-2">
+    <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+      Space width:
+      <input
+        type="range"
+        min="20"
+        max="150"
+        bind:value={appState.spaceWidthPercent}
+        class="w-32"
+      />
+      <span class="text-xs text-gray-400 w-10 text-center">{appState.spaceWidthPercent}%</span>
+    </label>
+    <p class="text-xs text-gray-400 dark:text-gray-500">
+      Percentage of average lowercase letter width
+    </p>
+  </div>
+
   {#if thumbnails.length === 0}
     <p class="text-amber-600 dark:text-amber-400 text-sm">
       No cells detected. Go back and check the grid.

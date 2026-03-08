@@ -210,6 +210,7 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
       glyphMap = new Map();
       const flatCells = grid.cells.flat();
       const total = Math.min(flatCells.length, charMap.length);
+      const refHeight = Math.max(...flatCells.map(c => c.h));
       let traced = 0;
 
       for (let i = 0; i < total; i++) {
@@ -228,7 +229,7 @@ describeIfFontPng('End-to-end: font.png pipeline', () => {
           cropped.imageData.width,
           cropped.imageData.height,
           EM_SQUARE,
-          { cellHeight: cell.h, trimOffsetY: cropped.trimRect.y }
+          { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y }
         );
         const cleaned = cleanupPaths(commands);
         if (cleaned.length > 0) {
