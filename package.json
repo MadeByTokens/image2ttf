@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "vite build && gh-pages -d dist"
   },
   "dependencies": {
     "imagetracerjs": "^1.2.6",
@@ -18,6 +19,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.1.0",
     "canvas": "^3.1.0",
+    "gh-pages": "^6.3.0",
     "jsdom": "^26.0.0",
     "svelte": "^5.20.0",
     "tailwindcss": "^4.1.0",
