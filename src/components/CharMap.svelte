@@ -217,11 +217,43 @@
         </button>
       </div>
 
-      <!-- Thumbnail preview -->
-      {#if adjustingThumb?.dataUrl}
+      <!-- Visual preview with adjustment guides -->
+      {#if adjustingThumb?.dataUrl && adjustingAdj}
+        {@const bl = adjustingAdj.baseline}
+        {@const bL = adjustingAdj.bearingLeft}
+        {@const bR = adjustingAdj.bearingRight}
+        {@const scale = 0.12}
+        {@const imgShiftY = -bl * scale}
+        {@const leftW = Math.max(0, bL * scale)}
+        {@const rightW = Math.max(0, bR * scale)}
         <div class="flex justify-center mb-4">
-          <div class="w-20 h-20 flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg border dark:border-gray-700">
-            <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
+          <div class="relative bg-gray-50 dark:bg-gray-900 rounded-lg border dark:border-gray-700 overflow-hidden"
+               style="width: 160px; height: 100px;">
+            <!-- Left bearing indicator -->
+            {#if bL !== 0}
+              <div class="absolute top-0 bottom-0 left-0 border-r-2 transition-all
+                          {bL > 0 ? 'bg-blue-200 dark:bg-blue-900/30 border-blue-400' : 'bg-red-200 dark:bg-red-900/30 border-red-400'}"
+                   style="width: {Math.abs(bL * scale)}px;"></div>
+            {/if}
+            <!-- Right bearing indicator -->
+            {#if bR !== 0}
+              <div class="absolute top-0 bottom-0 right-0 border-l-2 transition-all
+                          {bR > 0 ? 'bg-blue-200 dark:bg-blue-900/30 border-blue-400' : 'bg-red-200 dark:bg-red-900/30 border-red-400'}"
+                   style="width: {Math.abs(bR * scale)}px;"></div>
+            {/if}
+            <!-- Baseline reference line (fixed) -->
+            <div class="absolute left-0 right-0 border-t border-dashed border-gray-300 dark:border-gray-600"
+                 style="top: 75%;"></div>
+            <!-- Glyph image (shifts with baseline) -->
+            <div class="absolute inset-0 flex items-center justify-center transition-transform"
+                 style="transform: translateY({imgShiftY}px); padding-left: {leftW}px; padding-right: {rightW}px;">
+              <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
+            </div>
+            <!-- Adjusted baseline line -->
+            {#if bl !== 0}
+              <div class="absolute left-0 right-0 border-t-2 border-amber-500 dark:border-amber-400 transition-all"
+                   style="top: calc(75% + {imgShiftY}px);"></div>
+            {/if}
           </div>
         </div>
       {/if}

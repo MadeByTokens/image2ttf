@@ -252,6 +252,185 @@ export function injectKernTable(fontBuffer, pairs) {
 }
 
 /**
+ * Inject a GPOS table with kern feature into a font ArrayBuffer.
+ * Browsers use GPOS (not kern) for CFF-based OpenType fonts (which opentype.js produces).
+ * Builds a PairPosFormat1 subtable under a 'kern' feature.
+ *
+ * @param {ArrayBuffer} fontBuffer - the font binary from font.toArrayBuffer()
+ * @param {Array<{left: number, right: number, value: number}>} pairs - glyph index pairs + kerning value
+ * @returns {ArrayBuffer} new font binary with GPOS table
+ */
+export function injectGposTable(fontBuffer, pairs) {
+  if (!pairs || pairs.length === 0) return fontBuffer;
+
+  const src = new DataView(fontBuffer);
+  const numTables = src.getUint16(4);
+  const HEADER = 12;
+  const REC = 16;
+
+  // Check if GPOS table already exists
+  for (let i = 0; i < numTables; i++) {
+    const tag = src.getUint32(HEADER + i * REC);
+    if (tag === 0x47504F53) return fontBuffer; // 'GPOS' already present
+  }
+
+  // Group pairs by left glyph, sort within groups by right glyph
+  const grouped = new Map();
+  for (const p of pairs) {
+    if (!grouped.has(p.left)) grouped.set(p.left, []);
+    grouped.get(p.left).push({ right: p.right, value: p.value });
+  }
+  const sortedLeftGlyphs = [...grouped.keys()].sort((a, b) => a - b);
+  for (const [, list] of grouped) list.sort((a, b) => a.right - b.right);
+
+  const N = sortedLeftGlyphs.length;
+
+  // --- Calculate sizes ---
+  // Fixed structure: GPOS header(10) + ScriptList(20) + FeatureList(14) + LookupList header(12) = 56
+  const FIXED = 56;
+
+  // PairPos subtable header: posFormat(2) + coverageOffset(2) + vf1(2) + vf2(2) + pairSetCount(2) + offsets(N*2)
+  const subtableHeader = 10 + N * 2;
+
+  // PairSets: for each left glyph, count(2) + pairs * (secondGlyph(2) + value(2))
+  let totalPairSetBytes = 0;
+  const pairSetSizes = [];
+  for (const lg of sortedLeftGlyphs) {
+    const sz = 2 + grouped.get(lg).length * 4;
+    pairSetSizes.push(sz);
+    totalPairSetBytes += sz;
+  }
+
+  // Coverage: format(2) + count(2) + glyphs(N*2)
+  const coverageSize = 4 + N * 2;
+
+  const gposLen = FIXED + subtableHeader + totalPairSetBytes + coverageSize;
+  const gposPad = (gposLen + 3) & ~3;
+
+  // --- Build GPOS binary ---
+  const gposBuf = new ArrayBuffer(gposPad);
+  const g = new DataView(gposBuf);
+  let o = 0;
+
+  // GPOS Header (offset 0)
+  g.setUint16(o, 1); o += 2;     // majorVersion
+  g.setUint16(o, 0); o += 2;     // minorVersion
+  g.setUint16(o, 10); o += 2;    // scriptListOffset
+  g.setUint16(o, 30); o += 2;    // featureListOffset
+  g.setUint16(o, 44); o += 2;    // lookupListOffset
+
+  // ScriptList (offset 10, 20 bytes)
+  g.setUint16(o, 1); o += 2;                               // scriptCount
+  g.setUint32(o, 0x44464C54); o += 4;                      // 'DFLT'
+  g.setUint16(o, 8); o += 2;                               // scriptOffset (from ScriptList)
+  // Script (offset 18)
+  g.setUint16(o, 4); o += 2;                               // defaultLangSysOffset (from Script)
+  g.setUint16(o, 0); o += 2;                               // langSysCount
+  // DefaultLangSys (offset 22)
+  g.setUint16(o, 0); o += 2;                               // lookupOrderOffset
+  g.setUint16(o, 0xFFFF); o += 2;                          // requiredFeatureIndex
+  g.setUint16(o, 1); o += 2;                               // featureIndexCount
+  g.setUint16(o, 0); o += 2;                               // featureIndices[0]
+
+  // FeatureList (offset 30, 14 bytes)
+  g.setUint16(o, 1); o += 2;                               // featureCount
+  g.setUint32(o, 0x6B65726E); o += 4;                      // 'kern'
+  g.setUint16(o, 8); o += 2;                               // featureOffset (from FeatureList)
+  // Feature (offset 38)
+  g.setUint16(o, 0); o += 2;                               // featureParamsOffset
+  g.setUint16(o, 1); o += 2;                               // lookupCount
+  g.setUint16(o, 0); o += 2;                               // lookupListIndices[0]
+
+  // LookupList (offset 44)
+  g.setUint16(o, 1); o += 2;                               // lookupCount
+  g.setUint16(o, 4); o += 2;                               // lookupOffsets[0] (from LookupList)
+  // Lookup (offset 48)
+  g.setUint16(o, 2); o += 2;                               // lookupType = PairPos
+  g.setUint16(o, 0); o += 2;                               // lookupFlag
+  g.setUint16(o, 1); o += 2;                               // subtableCount
+  g.setUint16(o, 8); o += 2;                               // subtableOffsets[0] (from Lookup)
+
+  // PairPosFormat1 (offset 56)
+  const subtableStart = o;
+  g.setUint16(o, 1); o += 2;                               // posFormat
+  // coverageOffset — fill after we know where coverage lands
+  const coverageOffsetPos = o;
+  o += 2;                                                    // placeholder for coverageOffset
+  g.setUint16(o, 0x0004); o += 2;                          // valueFormat1 = XAdvance
+  g.setUint16(o, 0x0000); o += 2;                          // valueFormat2 = none
+  g.setUint16(o, N); o += 2;                               // pairSetCount
+
+  // PairSet offsets (from subtable start)
+  let pairSetOffset = subtableHeader; // first PairSet after header
+  for (let i = 0; i < N; i++) {
+    g.setUint16(o, pairSetOffset); o += 2;
+    pairSetOffset += pairSetSizes[i];
+  }
+
+  // PairSets
+  for (let i = 0; i < N; i++) {
+    const pairList = grouped.get(sortedLeftGlyphs[i]);
+    g.setUint16(o, pairList.length); o += 2;               // pairValueCount
+    for (const p of pairList) {
+      g.setUint16(o, p.right); o += 2;                     // secondGlyph
+      g.setInt16(o, p.value); o += 2;                      // value1 (XAdvance)
+    }
+  }
+
+  // Coverage table (format 1)
+  const coverageStart = o - subtableStart;
+  g.setUint16(coverageOffsetPos, coverageStart);            // patch coverageOffset
+  g.setUint16(o, 1); o += 2;                               // coverageFormat
+  g.setUint16(o, N); o += 2;                               // glyphCount
+  for (const lg of sortedLeftGlyphs) {
+    g.setUint16(o, lg); o += 2;                             // glyphArray
+  }
+
+  // Checksum
+  let checksum = 0;
+  for (let i = 0; i < gposPad; i += 4) {
+    checksum = (checksum + g.getUint32(i)) >>> 0;
+  }
+
+  // Splice GPOS into SFNT (same pattern as injectKernTable)
+  const newNum = numTables + 1;
+  const oldRecEnd = HEADER + numTables * REC;
+  const newRecEnd = HEADER + newNum * REC;
+  const newSize = fontBuffer.byteLength + REC + gposPad;
+  const dst = new ArrayBuffer(newSize);
+  const dv = new DataView(dst);
+  const dstArr = new Uint8Array(dst);
+  const srcArr = new Uint8Array(fontBuffer);
+
+  dv.setUint32(0, src.getUint32(0));
+  dv.setUint16(4, newNum);
+  const tp2 = Math.pow(2, Math.floor(Math.log2(newNum)));
+  dv.setUint16(6, tp2 * 16);
+  dv.setUint16(8, Math.floor(Math.log2(tp2)));
+  dv.setUint16(10, newNum * 16 - tp2 * 16);
+
+  for (let i = 0; i < numTables; i++) {
+    const s = HEADER + i * REC;
+    dv.setUint32(s, src.getUint32(s));
+    dv.setUint32(s + 4, src.getUint32(s + 4));
+    dv.setUint32(s + 8, src.getUint32(s + 8) + REC);
+    dv.setUint32(s + 12, src.getUint32(s + 12));
+  }
+
+  const gposRecOff = HEADER + numTables * REC;
+  const gposDataOff = fontBuffer.byteLength + REC;
+  dv.setUint32(gposRecOff, 0x47504F53);      // 'GPOS'
+  dv.setUint32(gposRecOff + 4, checksum);
+  dv.setUint32(gposRecOff + 8, gposDataOff);
+  dv.setUint32(gposRecOff + 12, gposLen);
+
+  dstArr.set(srcArr.subarray(oldRecEnd), newRecEnd);
+  dstArr.set(new Uint8Array(gposBuf), gposDataOff);
+
+  return dst;
+}
+
+/**
  * Build kerning pairs array from a char-pair map for kern table injection.
  * @param {opentype.Font} font - the font object (for charToGlyphIndex)
  * @param {Object} kerningMap - e.g. { "AV": -80, "To": -40 }
@@ -276,10 +455,11 @@ export function buildKernPairs(font, kerningMap) {
 export function downloadFont(font, filename = 'handwriting.ttf', kerningMap = null) {
   let buffer = font.toArrayBuffer();
 
-  // Inject kern table if kerning pairs provided
+  // Inject kerning tables if pairs provided
   if (kerningMap && Object.keys(kerningMap).length > 0) {
     const pairs = buildKernPairs(font, kerningMap);
     if (pairs.length > 0) {
+      buffer = injectGposTable(buffer, pairs);
       buffer = injectKernTable(buffer, pairs);
     }
   }

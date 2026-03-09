@@ -1,6 +1,6 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
-  import { createFont, injectKernTable, buildKernPairs } from '../lib/font-builder.js';
+  import { createFont, injectKernTable, injectGposTable, buildKernPairs } from '../lib/font-builder.js';
   import { smoothnessToOpts } from '../lib/tracing.js';
   import { traceCell } from '../lib/glyph-utils.js';
   import { runTracingAsync, abortCompute } from '../lib/compute.js';
@@ -125,6 +125,7 @@
       if (kerning && Object.keys(kerning).length > 0) {
         const pairs = buildKernPairs(font, kerning);
         if (pairs.length > 0) {
+          buffer = injectGposTable(buffer, pairs);
           buffer = injectKernTable(buffer, pairs);
         }
       }

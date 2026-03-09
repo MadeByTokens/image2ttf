@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createFont, injectKernTable, buildKernPairs } from '../../src/lib/font-builder.js';
+import { createFont, injectKernTable, injectGposTable, buildKernPairs } from '../../src/lib/font-builder.js';
 import opentype from 'opentype.js';
 
 /** Create a minimal font with a few glyphs for kern testing */
@@ -109,6 +109,80 @@ describe('font-builder kern', () => {
       const first = injectKernTable(buf, pairs);
       const second = injectKernTable(first, pairs);
       // Should return the same buffer since kern already exists
+      expect(second).toBe(first);
+    });
+  });
+
+  describe('injectGposTable', () => {
+    it('should return original buffer when pairs is empty', () => {
+      const font = makeTestFont();
+      const buf = font.toArrayBuffer();
+      expect(injectGposTable(buf, [])).toBe(buf);
+      expect(injectGposTable(buf, null)).toBe(buf);
+    });
+
+    it('should inject GPOS table and produce a larger buffer', () => {
+      const font = makeTestFont('AV');
+      const buf = font.toArrayBuffer();
+      const leftIdx = font.charToGlyphIndex('A');
+      const rightIdx = font.charToGlyphIndex('V');
+      const pairs = [{ left: leftIdx, right: rightIdx, value: -80 }];
+      const newBuf = injectGposTable(buf, pairs);
+
+      expect(newBuf.byteLength).toBeGreaterThan(buf.byteLength);
+
+      // Verify GPOS table tag exists in new buffer
+      const dv = new DataView(newBuf);
+      const numTables = dv.getUint16(4);
+      let hasGpos = false;
+      for (let i = 0; i < numTables; i++) {
+        if (dv.getUint32(12 + i * 16) === 0x47504F53) hasGpos = true;
+      }
+      expect(hasGpos).toBe(true);
+    });
+
+    it('should produce a parseable font with kerning via GPOS', () => {
+      const font = makeTestFont('AV');
+      const buf = font.toArrayBuffer();
+      const leftIdx = font.charToGlyphIndex('A');
+      const rightIdx = font.charToGlyphIndex('V');
+      const pairs = [{ left: leftIdx, right: rightIdx, value: -80 }];
+      const newBuf = injectGposTable(buf, pairs);
+
+      // opentype.js should be able to parse it and read kerning from GPOS
+      const parsed = opentype.parse(newBuf);
+      const kernValue = parsed.getKerningValue(leftIdx, rightIdx);
+      expect(kernValue).toBe(-80);
+    });
+
+    it('should handle multiple pairs across different left glyphs', () => {
+      const font = makeTestFont('AVTO');
+      const buf = font.toArrayBuffer();
+      const pairs = [
+        { left: font.charToGlyphIndex('A'), right: font.charToGlyphIndex('V'), value: -80 },
+        { left: font.charToGlyphIndex('T'), right: font.charToGlyphIndex('O'), value: -40 },
+        { left: font.charToGlyphIndex('A'), right: font.charToGlyphIndex('T'), value: -60 },
+      ];
+      const newBuf = injectGposTable(buf, pairs);
+      const parsed = opentype.parse(newBuf);
+
+      expect(parsed.getKerningValue(
+        font.charToGlyphIndex('A'), font.charToGlyphIndex('V')
+      )).toBe(-80);
+      expect(parsed.getKerningValue(
+        font.charToGlyphIndex('T'), font.charToGlyphIndex('O')
+      )).toBe(-40);
+      expect(parsed.getKerningValue(
+        font.charToGlyphIndex('A'), font.charToGlyphIndex('T')
+      )).toBe(-60);
+    });
+
+    it('should not inject a second GPOS table if one exists', () => {
+      const font = makeTestFont('AV');
+      const buf = font.toArrayBuffer();
+      const pairs = [{ left: font.charToGlyphIndex('A'), right: font.charToGlyphIndex('V'), value: -80 }];
+      const first = injectGposTable(buf, pairs);
+      const second = injectGposTable(first, pairs);
       expect(second).toBe(first);
     });
   });
