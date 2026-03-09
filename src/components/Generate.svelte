@@ -15,7 +15,8 @@
 
     try {
       const font = createFont(appState.glyphPaths, {
-        familyName: appState.fontName || 'MyHandwriting'
+        familyName: appState.fontName || 'MyHandwriting',
+        glyphAdjustments: appState.glyphAdjustments
       });
       appState.generatedFont = font;
       generated = true;

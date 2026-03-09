@@ -47,6 +47,7 @@
       appState.grid = grid;
       const flatCells = grid.cells.flat();
       appState.charMap = DEFAULT_CHARSET.slice(0, flatCells.length);
+      appState.glyphAdjustments = {};
       selectedCell = null;
       contextMenu = null;
       drawOverlay();
@@ -79,6 +80,7 @@
 
       appState.grid = result;
       resyncCharMap();
+      appState.glyphAdjustments = {};
       selectedCell = null;
       contextMenu = null;
       drawOverlay();

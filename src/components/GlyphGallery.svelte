@@ -1,7 +1,8 @@
 <script>
   import { ASCENDER } from '../lib/constants.js';
+  import { applyGlyphAdjustments } from '../lib/font-builder.js';
 
-  let { glyphEntries = [], selectedGlyph = $bindable(null), onretrace, ondelete } = $props();
+  let { glyphEntries = [], selectedGlyph = $bindable(null), onretrace, ondelete, glyphAdjustments = {} } = $props();
 
   function commandsToSvgPath(commands) {
     const fy = (y) => ASCENDER - y;
@@ -18,10 +19,17 @@
     return d.trim();
   }
 
-  const displayEntries = $derived(glyphEntries.map(e => ({
-    ...e,
-    svgPath: commandsToSvgPath(e.commands)
-  })));
+  const displayEntries = $derived(glyphEntries.map(e => {
+    const adj = glyphAdjustments[e.char];
+    const { commands, width } = applyGlyphAdjustments(e.commands, e.width, adj);
+    return {
+      ...e,
+      commands,
+      width,
+      svgPath: commandsToSvgPath(commands),
+      hasAdjustments: !!adj && (adj.baseline !== 0 || adj.bearingLeft !== 0 || adj.bearingRight !== 0)
+    };
+  }));
 </script>
 
 <div class="w-full max-w-4xl">

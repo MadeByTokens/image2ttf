@@ -115,7 +115,10 @@
       fontVersion++;
       const buildVersion = fontVersion;
       const name = `PreviewFont${buildVersion}`;
-      const font = createFont(appState.glyphPaths, { familyName: name });
+      const font = createFont(appState.glyphPaths, {
+        familyName: name,
+        glyphAdjustments: appState.glyphAdjustments
+      });
 
       const kerning = appState.kerningPairs;
       let buffer = font.toArrayBuffer();
@@ -240,6 +243,7 @@
         bind:selectedGlyph
         onretrace={retraceGlyph}
         ondelete={deleteGlyph}
+        glyphAdjustments={appState.glyphAdjustments}
       />
     {/if}
 

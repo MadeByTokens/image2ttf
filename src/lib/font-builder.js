@@ -3,6 +3,34 @@ import { EM_SQUARE, ASCENDER, DESCENDER } from './constants.js';
 import { FontBuildError } from './errors.js';
 
 /**
+ * Apply per-glyph adjustments (baseline shift, left/right bearing) to path commands.
+ * @param {Array} commands - opentype path commands
+ * @param {number} width - original advance width
+ * @param {{ baseline?: number, bearingLeft?: number, bearingRight?: number }} adjustments
+ * @returns {{ commands: Array, width: number }}
+ */
+export function applyGlyphAdjustments(commands, width, adjustments) {
+  if (!adjustments) return { commands, width };
+  const { baseline = 0, bearingLeft = 0, bearingRight = 0 } = adjustments;
+  if (baseline === 0 && bearingLeft === 0 && bearingRight === 0) {
+    return { commands, width };
+  }
+
+  const newCommands = commands.map(cmd => {
+    const c = { ...cmd };
+    if ('x' in c) c.x += bearingLeft;
+    if ('x1' in c) c.x1 += bearingLeft;
+    if ('x2' in c) c.x2 += bearingLeft;
+    if ('y' in c) c.y += baseline;
+    if ('y1' in c) c.y1 += baseline;
+    if ('y2' in c) c.y2 += baseline;
+    return c;
+  });
+
+  return { commands: newCommands, width: Math.max(0, width + bearingLeft + bearingRight) };
+}
+
+/**
  * Build a single opentype.Glyph from path commands
  */
 export function buildGlyph(char, pathCommands, advanceWidth = EM_SQUARE * 0.6) {
@@ -56,7 +84,8 @@ function _createFontInner(glyphMap, options = {}) {
     styleName = 'Regular',
     unitsPerEm = EM_SQUARE,
     ascender = ASCENDER,
-    descender = DESCENDER
+    descender = DESCENDER,
+    glyphAdjustments = {}
   } = options;
 
   // .notdef glyph (required)
@@ -99,11 +128,11 @@ function _createFontInner(glyphMap, options = {}) {
     if (seenUnicodes.has(unicode)) continue;
     seenUnicodes.add(unicode);
 
-    const glyph = buildGlyph(
-      char,
-      data.commands || [],
-      data.width || unitsPerEm * 0.6
+    const adj = glyphAdjustments[char];
+    const { commands, width } = applyGlyphAdjustments(
+      data.commands || [], data.width || unitsPerEm * 0.6, adj
     );
+    const glyph = buildGlyph(char, commands, width);
     glyphs.push(glyph);
   }
 

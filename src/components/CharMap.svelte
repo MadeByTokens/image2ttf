@@ -8,6 +8,7 @@
   let thumbnails = $state([]);
   let computing = $state(false);
   let progress = $state({ current: 0, total: 0 });
+  let adjustingChar = $state(null);  // char being adjusted, or null
 
   // Generate thumbnails when this step is shown
   $effect(() => {
@@ -59,12 +60,49 @@
   function updateChar(index, newChar) {
     appState.charMap[index] = newChar;
   }
+
+  function openAdjustDialog(char) {
+    if (!char || char === ' ') return;
+    adjustingChar = char;
+  }
+
+  function getAdj(char) {
+    return appState.glyphAdjustments[char] || { baseline: 0, bearingLeft: 0, bearingRight: 0 };
+  }
+
+  function setAdj(char, field, value) {
+    const current = getAdj(char);
+    const updated = { ...current, [field]: Number(value) };
+    if (updated.baseline === 0 && updated.bearingLeft === 0 && updated.bearingRight === 0) {
+      const copy = { ...appState.glyphAdjustments };
+      delete copy[char];
+      appState.glyphAdjustments = copy;
+    } else {
+      appState.glyphAdjustments = { ...appState.glyphAdjustments, [char]: updated };
+    }
+  }
+
+  function resetAdj(char) {
+    const copy = { ...appState.glyphAdjustments };
+    delete copy[char];
+    appState.glyphAdjustments = copy;
+  }
+
+  function hasAdj(char) {
+    const a = appState.glyphAdjustments[char];
+    return a && (a.baseline !== 0 || a.bearingLeft !== 0 || a.bearingRight !== 0);
+  }
+
+  const adjustingThumb = $derived(
+    adjustingChar ? thumbnails.find(t => t.char === adjustingChar) : null
+  );
+  const adjustingAdj = $derived(adjustingChar ? getAdj(adjustingChar) : null);
 </script>
 
 <div class="flex flex-col items-center gap-4">
   <h2 class="text-2xl font-bold">Character Map</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
-    Verify each detected character is labeled correctly. Click a label to edit.
+    Verify each detected character is labeled correctly. Click a thumbnail to adjust glyph metrics.
   </p>
 
   {#if computing}
@@ -95,15 +133,24 @@
 
   <div class="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-13 gap-2 w-full max-w-4xl">
     {#each thumbnails as thumb (thumb.index)}
-      <div class="flex flex-col items-center gap-1 p-1 rounded border dark:border-gray-700
-                  {thumb.empty ? 'opacity-40' : ''}">
-        <div class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-800 rounded overflow-hidden">
+      <div class="flex flex-col items-center gap-1 p-1 rounded border transition-colors
+                  {thumb.empty ? 'opacity-40' : ''}
+                  {hasAdj(thumb.char) ? 'border-amber-400 dark:border-amber-500' : 'dark:border-gray-700'}">
+        <button
+          onclick={() => openAdjustDialog(thumb.char)}
+          class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-800 rounded overflow-hidden
+                 cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all relative"
+          aria-label="Adjust metrics for {thumb.char}"
+        >
           {#if thumb.dataUrl}
             <img src={thumb.dataUrl} alt={thumb.char} class="max-w-full max-h-full object-contain" />
           {:else}
             <span class="text-gray-300 text-xs">empty</span>
           {/if}
-        </div>
+          {#if hasAdj(thumb.char)}
+            <span class="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>
+          {/if}
+        </button>
         <input
           type="text"
           value={thumb.char}
@@ -142,3 +189,123 @@
     </p>
   {/if}
 </div>
+
+<!-- Glyph adjustment dialog -->
+{#if adjustingChar && adjustingAdj}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    onclick={(e) => { if (e.target === e.currentTarget) adjustingChar = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') adjustingChar = null; }}
+    role="dialog"
+    tabindex="-1"
+    aria-modal="true"
+    aria-label="Adjust glyph metrics for {adjustingChar}"
+  >
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold">
+          Adjust "<span class="font-mono">{adjustingChar}</span>"
+        </h3>
+        <button
+          onclick={() => { adjustingChar = null; }}
+          class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          aria-label="Close"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Thumbnail preview -->
+      {#if adjustingThumb?.dataUrl}
+        <div class="flex justify-center mb-4">
+          <div class="w-20 h-20 flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg border dark:border-gray-700">
+            <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
+          </div>
+        </div>
+      {/if}
+
+      <!-- Sliders -->
+      <div class="flex flex-col gap-4">
+        <label class="block">
+          <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
+            <span>Baseline offset</span>
+            <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.baseline}</span>
+          </span>
+          <input
+            type="range"
+            min="-200"
+            max="200"
+            step="5"
+            value={adjustingAdj.baseline}
+            oninput={(e) => setAdj(adjustingChar, 'baseline', e.target.value)}
+            class="w-full"
+          />
+          <span class="flex justify-between text-xs text-gray-400 mt-0.5">
+            <span>Down</span>
+            <span>Up</span>
+          </span>
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
+            <span>Left bearing</span>
+            <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.bearingLeft}</span>
+          </span>
+          <input
+            type="range"
+            min="-100"
+            max="200"
+            step="5"
+            value={adjustingAdj.bearingLeft}
+            oninput={(e) => setAdj(adjustingChar, 'bearingLeft', e.target.value)}
+            class="w-full"
+          />
+          <span class="flex justify-between text-xs text-gray-400 mt-0.5">
+            <span>Tighter</span>
+            <span>Wider</span>
+          </span>
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
+            <span>Right bearing</span>
+            <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.bearingRight}</span>
+          </span>
+          <input
+            type="range"
+            min="-100"
+            max="200"
+            step="5"
+            value={adjustingAdj.bearingRight}
+            oninput={(e) => setAdj(adjustingChar, 'bearingRight', e.target.value)}
+            class="w-full"
+          />
+          <span class="flex justify-between text-xs text-gray-400 mt-0.5">
+            <span>Tighter</span>
+            <span>Wider</span>
+          </span>
+        </label>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-between mt-5">
+        <button
+          onclick={() => resetAdj(adjustingChar)}
+          class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
+                 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >Reset</button>
+        <button
+          onclick={() => { adjustingChar = null; }}
+          class="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white
+                 hover:bg-indigo-700 transition-colors"
+        >Done</button>
+      </div>
+
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
+        Values in font units. Cleared on re-detect or reset.
+      </p>
+    </div>
+  </div>
+{/if}

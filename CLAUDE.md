@@ -13,18 +13,18 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 ### Pipeline (wizard steps)
 1. **Upload** → loads image; pan/rotate/zoom viewer (mode-based: Pan/Rotate/Zoom toggle); rotation applied to canvas data
 2. **Detect** (GridOverlay) → auto-detects grid; Advanced panel (6 params); Edit mode: drag cell edges, drag orange row separators, right-click for cell/row operations (add/delete/split/relabel)
-3. **Characters** (CharMap) → maps cells to chars; editable labels; space width slider (20-150% of avg lowercase)
+3. **Characters** (CharMap) → maps cells to chars; editable labels; space width slider (20-150% of avg lowercase); per-glyph adjustment dialog (baseline, left/right bearing)
 4. **Preview** → traces glyphs (smoothness slider 1-10), glyph gallery with SVG inspect/retrace/delete, kerning pair editor, live font preview via `@font-face` blob URL with kern table
 5. **Generate** → builds final TTF via opentype.js with kern table injection, offers download
 
 ### Key files
-- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value).
+- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value), `glyphAdjustments` (char → {baseline, bearingLeft, bearingRight}).
 - `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
 - `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`; exports `smoothnessToOpts(1-10)` for mapping slider to imagetracerjs params
 - `src/lib/glyph-utils.js` — shared glyph utilities: `computeGlyphWidth`, `computeSpaceWidth`, `traceCell` (used by pipeline, worker, Preview)
 - `src/lib/redetect-columns.js` — shared `redetectColumnsForRows()` (used by worker and compute fallback)
 - `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `smoothness`
-- `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font; `injectKernTable(buffer, pairs)` manually builds kern table binary; `downloadFont(font, filename, kerningMap)` with kern support
+- `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font (options includes `glyphAdjustments`); `applyGlyphAdjustments(commands, width, adj)` shifts coords/width; `injectKernTable(buffer, pairs)` manually builds kern table binary; `downloadFont(font, filename, kerningMap)` with kern support
 - `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
 - `src/lib/errors.js` — custom error classes: `ImageLoadError`, `GridDetectionError`, `TracingError`, `FontBuildError`
 - `src/lib/logger.js` — structured logger toggled via `localStorage.setItem('debug', '1')`
@@ -40,7 +40,7 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 ```bash
 npm run dev            # Start dev server
 npm run build          # Run tests + production build
-npm run test           # Run vitest (54 tests: 43 unit + 11 e2e)
+npm run test           # Run vitest (61 tests: 50 unit + 11 e2e)
 npm run test:coverage  # Run tests with v8 coverage report
 npm run deploy         # Run tests + build + publish to GitHub Pages via gh-pages
 ```
@@ -54,7 +54,7 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 
 ## Workflow Rules
 
-- **Always run tests before committing**: `npx vitest run` — all 54 tests must pass before any commit or deploy.
+- **Always run tests before committing**: `npx vitest run` — all 61 tests must pass before any commit or deploy.
 - **Always run build after code changes**: `npx vite build` — verify no build errors before committing.
 - **Record discoveries**: When you find a bug, gotcha, or important insight, immediately update MEMORY.md and/or CLAUDE.md so it persists across sessions.
 
