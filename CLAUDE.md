@@ -60,7 +60,7 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 
 ## Testing
 
-- **Unit tests** (43) — segmentation, tracing, font-builder, kern injection, pipeline, glyph-utils, errors
+- **Unit tests** (55) — segmentation, tracing, font-builder, glyph adjustments, kern+GPOS injection, pipeline, glyph-utils, errors
 - **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
   - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
   - Bbox-normalized IoU: avg ~0.68, thresholds: per-glyph ≥0.20, avg ≥0.30
