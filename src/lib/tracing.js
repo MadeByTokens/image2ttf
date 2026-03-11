@@ -96,9 +96,10 @@ function parseSVGPath(d) {
  * @param {object} [metrics] - optional cell metrics for uniform scaling
  * @param {number} [metrics.cellHeight] - original cell height (row height) for uniform scale
  * @param {number} [metrics.trimOffsetY] - Y offset of trimmed region within the cell
+ * @param {number} [metrics.baselineInCell] - baseline position in pixels from cell top
  */
 export function svgPathToOpentypePath(svgPathData, sourceWidth, sourceHeight, emSquare = EM_SQUARE, metrics = {}) {
-  const { cellHeight, trimOffsetY = 0 } = metrics;
+  const { cellHeight, trimOffsetY = 0, baselineInCell } = metrics;
   const commands = [];
 
   // When cellHeight is provided, scale uniformly based on cell height
@@ -109,15 +110,18 @@ export function svgPathToOpentypePath(svgPathData, sourceWidth, sourceHeight, em
   // Center horizontally
   const scaledW = sourceWidth * scale;
   const offsetX = Math.max(0, (emSquare - scaledW) / 2);
-  // Flip Y: font coords have Y going up, SVG has Y going down
-  // Place baseline at ~20% from bottom (descender region)
-  const baselineOffset = emSquare * 0.15;
+
+  // Baseline-relative vertical positioning.
+  // baselineInCell: pixels from cell top to baseline (default: 75% of refSize).
+  // All cells align at fontBaselineY regardless of cell height.
+  const blInCell = baselineInCell ?? (refSize * 0.75);
+  const fontBaselineY = emSquare * 0.10;
 
   function tx(x) { return Math.round((x * scale + offsetX) * 100) / 100; }
   function ty(y) {
-    // Account for trim offset so vertical position within cell is preserved
     const cellY = trimOffsetY + y;
-    return Math.round((emSquare - cellY * scale - baselineOffset) * 100) / 100;
+    const distFromBaseline = cellY - blInCell;
+    return Math.round((fontBaselineY - distFromBaseline * scale) * 100) / 100;
   }
 
   let curX = 0, curY = 0;

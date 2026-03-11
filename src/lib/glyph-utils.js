@@ -57,12 +57,17 @@ export function traceCell(sourceCanvas, cell, refHeight, tracingOpts = {}) {
   const svgPaths = traceGlyph(cropped.imageData, tracingOpts);
   if (svgPaths.length === 0) return null;
 
+  // Compute baseline position within cell (pixels from cell top)
+  const baselineInCell = cell.baseline != null
+    ? cell.baseline - cell.y
+    : cell.h * 0.75;
+
   const commands = svgPathToOpentypePath(
     svgPaths,
     cropped.imageData.width,
     cropped.imageData.height,
     EM_SQUARE,
-    { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y }
+    { cellHeight: refHeight, trimOffsetY: cropped.trimRect.y, baselineInCell }
   );
   const cleaned = cleanupPaths(commands);
   if (cleaned.length === 0) return null;
