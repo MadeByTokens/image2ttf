@@ -49,7 +49,7 @@
       type="text"
       bind:value={appState.fontName}
       class="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
-             focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+             focus:ring-2 focus:ring-teal-500 focus:outline-none"
       placeholder="MyHandwriting"
     />
   </div>
@@ -62,8 +62,8 @@
     <button
       onclick={generate}
       disabled={generating || !appState.glyphPaths}
-      class="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold
-             hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed
+      class="px-6 py-3 bg-teal-600 text-white rounded-lg font-semibold
+             hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed
              transition-colors"
     >
       {#if generating}
@@ -99,7 +99,7 @@
 
       <button
         onclick={() => { generated = false; }}
-        class="text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+        class="text-sm text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400"
       >
         Regenerate with different settings
       </button>

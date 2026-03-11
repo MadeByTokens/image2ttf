@@ -86,7 +86,7 @@
       placeholder="A"
       class="w-8 text-center text-sm font-mono border rounded px-1 py-0.5
              dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200
-             focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+             focus:ring-1 focus:ring-teal-500 focus:outline-none"
     />
     <input
       type="text"
@@ -95,7 +95,7 @@
       placeholder="V"
       class="w-8 text-center text-sm font-mono border rounded px-1 py-0.5
              dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200
-             focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+             focus:ring-1 focus:ring-teal-500 focus:outline-none"
     />
     <button
       onclick={addCustomPair}

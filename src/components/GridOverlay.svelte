@@ -180,7 +180,7 @@
           ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
           ctx.lineWidth = 2.5;
         } else {
-          ctx.strokeStyle = 'rgba(79, 70, 229, 0.6)';
+          ctx.strokeStyle = 'rgba(13, 148, 136, 0.6)';
           ctx.lineWidth = 1.5;
         }
 
@@ -190,7 +190,7 @@
         );
 
         if (charIdx < appState.charMap.length) {
-          ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.95)' : 'rgba(79, 70, 229, 0.9)';
+          ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.95)' : 'rgba(13, 148, 136, 0.9)';
           ctx.font = `${Math.max(10, 12 * displayScale)}px monospace`;
           ctx.fillText(
             appState.charMap[charIdx],
@@ -842,8 +842,8 @@
     >Re-label</button>
     <button
       onclick={redetectColumns}
-      class="px-3 py-1.5 text-sm rounded-lg border border-indigo-300 dark:border-indigo-600
-             text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+      class="px-3 py-1.5 text-sm rounded-lg border border-teal-300 dark:border-teal-600
+             text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
       title="Keep row boundaries, re-detect columns within each row"
     >Re-detect</button>
     <button
@@ -856,19 +856,19 @@
       <button
         onclick={() => { mode = 'auto'; selectedCell = null; contextMenu = null; drawOverlay(); }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'auto'
-          ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >Auto</button>
       <button
         onclick={() => { mode = 'edit'; }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'edit'
-          ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+          ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >Edit</button>
     </div>
     <button
       onclick={() => { showAdvanced = !showAdvanced; }}
       class="px-3 py-1.5 text-sm rounded-lg border transition-colors
              {showAdvanced
-               ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+               ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
     >Advanced</button>
   </div>
@@ -891,15 +891,15 @@
       <span>Detected {totalRows} rows, {totalCells} cells</span>
       {#if mode === 'edit' && selectedInfo}
         {@const info = selectedInfo}
-        <span class="text-indigo-500 font-medium inline-flex items-center gap-1">
+        <span class="text-teal-500 font-medium inline-flex items-center gap-1">
           Selected:
           <input
             type="text"
             value={info.char}
             maxlength="1"
-            class="w-8 text-center font-mono font-bold border border-indigo-400 rounded px-0.5 py-0
-                   dark:bg-gray-800 dark:border-indigo-500 dark:text-indigo-300
-                   focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+            class="w-8 text-center font-mono font-bold border border-teal-400 rounded px-0.5 py-0
+                   dark:bg-gray-800 dark:border-teal-500 dark:text-teal-300
+                   focus:ring-1 focus:ring-teal-500 focus:outline-none"
             oninput={(e) => {
               if (e.target.value.length === 1) {
                 updateCellLabel(selectedCell.rowIdx, selectedCell.colIdx, e.target.value);

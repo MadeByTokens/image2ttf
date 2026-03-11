@@ -60,7 +60,7 @@
   <div class="flex gap-2 mt-3">
     <button
       onclick={() => onapply?.()}
-      class="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+      class="px-3 py-1.5 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
     >Apply</button>
     <button
       onclick={resetDefaults}

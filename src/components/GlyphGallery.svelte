@@ -42,7 +42,7 @@
         onclick={() => { selectedGlyph = selectedGlyph === entry.char ? null : entry.char; }}
         class="flex flex-col items-center gap-0.5 p-1 rounded border transition-colors
                {selectedGlyph === entry.char
-                 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                 ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'}"
       >
         <svg viewBox="-50 -50 1100 1100" class="w-10 h-10 bg-white dark:bg-gray-800 rounded">

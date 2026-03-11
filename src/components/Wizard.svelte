@@ -45,7 +45,7 @@
 
   <!-- Header -->
   <header class="pt-6 pb-2 text-center">
-    <h1 class="text-3xl sm:text-4xl font-bold text-indigo-600 dark:text-indigo-400">
+    <h1 class="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-teal-600 to-emerald-500 dark:from-teal-400 dark:to-emerald-300 bg-clip-text text-transparent">
       image2ttf
     </h1>
     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -89,7 +89,7 @@
   </main>
 
   <!-- Navigation -->
-  <nav class="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t dark:border-gray-700 px-4 py-3">
+  <nav class="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t dark:border-gray-700 px-4 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] dark:shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">
     <div class="max-w-lg mx-auto flex items-center justify-between">
       <button
         onclick={back}
@@ -111,10 +111,10 @@
         <button
           onclick={next}
           disabled={!canAdvance() || appState.isProcessing}
-          class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white
-                 hover:bg-indigo-700
+          class="px-5 py-2 text-sm font-semibold rounded-lg bg-teal-600 text-white shadow-sm
+                 hover:bg-teal-700 hover:shadow-md
                  disabled:opacity-50 disabled:cursor-not-allowed
-                 transition-colors"
+                 transition-all"
         >
           Next
         </button>

@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4f46e5;
-  --color-primary-light: #818cf8;
-  --color-primary-dark: #3730a3;
-  --color-surface: #ffffff;
-  --color-surface-dark: #1e1e2e;
-  --color-text: #1e293b;
-  --color-text-dark: #e2e8f0;
+  --color-primary: #0d9488;
+  --color-primary-light: #2dd4bf;
+  --color-primary-dark: #0f766e;
+  --color-surface: #f8faf9;
+  --color-surface-dark: #0f1419;
+  --color-text: #1a2332;
+  --color-text-dark: #e0e7ef;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
@@ -37,4 +37,54 @@ body.dark {
 body.light {
   background-color: var(--color-surface);
   color: var(--color-text);
+}
+
+/* Custom range slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #d1d5db;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #0d9488;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #0d9488;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+body.dark input[type="range"] {
+  background: #374151;
+}
+body.dark input[type="range"]::-webkit-slider-thumb {
+  border-color: #1f2937;
+}
+body.dark input[type="range"]::-moz-range-thumb {
+  border-color: #1f2937;
+}
+@media (prefers-color-scheme: dark) {
+  body:not(.light) input[type="range"] {
+    background: #374151;
+  }
+  body:not(.light) input[type="range"]::-webkit-slider-thumb {
+    border-color: #1f2937;
+  }
+  body:not(.light) input[type="range"]::-moz-range-thumb {
+    border-color: #1f2937;
+  }
 }

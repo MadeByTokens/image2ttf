@@ -119,7 +119,7 @@
       </div>
       {#if progress.total > 0}
         <div class="w-48 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div class="h-full bg-indigo-500 rounded-full transition-all"
+          <div class="h-full bg-teal-500 rounded-full transition-all"
                style="width: {progress.current / progress.total * 100}%"></div>
         </div>
       {/if}
@@ -139,7 +139,7 @@
         <button
           onclick={() => openAdjustDialog(thumb.char)}
           class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-800 rounded overflow-hidden
-                 cursor-pointer hover:ring-2 hover:ring-indigo-400 transition-all relative"
+                 cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all relative"
           aria-label="Adjust metrics for {thumb.char}"
         >
           {#if thumb.dataUrl}
@@ -157,7 +157,7 @@
           maxlength="1"
           class="w-10 text-center text-sm font-mono border rounded px-1 py-0.5
                  dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
-                 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                 focus:ring-1 focus:ring-teal-500 focus:outline-none"
           oninput={(e) => updateChar(thumb.index, e.target.value)}
           aria-label="Character label for cell {thumb.index + 1}"
         />
@@ -330,8 +330,8 @@
         >Reset</button>
         <button
           onclick={() => { adjustingChar = null; }}
-          class="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white
-                 hover:bg-indigo-700 transition-colors"
+          class="px-4 py-1.5 text-sm rounded-lg bg-teal-600 text-white
+                 hover:bg-teal-700 transition-colors"
         >Done</button>
       </div>
 

@@ -177,7 +177,7 @@
       </p>
       <div class="w-64 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <div
-          class="h-full bg-indigo-500 rounded-full transition-all"
+          class="h-full bg-teal-500 rounded-full transition-all"
           style="width: {appState.progressTotal > 0 ? (appState.progress / appState.progressTotal * 100) : 0}%"
         ></div>
       </div>
@@ -196,7 +196,7 @@
         onclick={() => { showGlyphs = !showGlyphs; }}
         class="px-3 py-1 text-sm rounded-lg border transition-colors
                {showGlyphs
-                 ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                 ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >
         {showGlyphs ? 'Hide' : 'Show'} Glyphs
@@ -205,7 +205,7 @@
         onclick={() => { showKerning = !showKerning; }}
         class="px-3 py-1 text-sm rounded-lg border transition-colors
                {showKerning
-                 ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                 ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >
         Kerning
@@ -263,7 +263,7 @@
         type="text"
         bind:value={previewText}
         class="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
-               focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+               focus:ring-2 focus:ring-teal-500 focus:outline-none"
         placeholder="Type something..."
       />
     </div>

@@ -182,9 +182,9 @@
 
   <button
     onclick={loadExample}
-    class="px-4 py-2 text-sm font-medium rounded-lg border border-indigo-300 dark:border-indigo-600
-           text-indigo-600 dark:text-indigo-400
-           hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+    class="px-4 py-2 text-sm font-medium rounded-lg border border-teal-300 dark:border-teal-600
+           text-teal-600 dark:text-teal-400
+           hover:bg-teal-50 dark:hover:bg-teal-900/30 transition-colors"
   >
     Try with example image
   </button>
@@ -194,8 +194,8 @@
     <div
       class="w-full max-w-lg h-64 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-4 cursor-pointer transition-colors
         {dragOver
-          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-          : 'border-gray-300 dark:border-gray-600 hover:border-indigo-400'}"
+          ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
+          : 'border-gray-300 dark:border-gray-600 hover:border-teal-400'}"
       ondrop={onDrop}
       ondragover={onDragOver}
       ondragleave={onDragLeave}
@@ -209,7 +209,7 @@
           d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        <span class="font-semibold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop
+        <span class="font-semibold text-teal-600 dark:text-teal-400">Click to upload</span> or drag and drop
       </p>
       <p class="text-xs text-gray-400">PNG, JPG, or WebP</p>
     </div>
@@ -222,17 +222,17 @@
           <button
             onclick={() => { mode = 'pan'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'pan'
-              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+              ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
           >Pan</button>
           <button
             onclick={() => { mode = 'rotate'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'rotate'
-              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+              ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
           >Rotate</button>
           <button
             onclick={() => { mode = 'zoom'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'zoom'
-              ? 'bg-indigo-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
+              ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
           >Zoom</button>
         </div>
         <button
