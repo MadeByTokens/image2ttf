@@ -21,7 +21,7 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 - `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`, `getCharset()`. Has `charLayout` (string[] for character grid layout), `spaceWidthPercent`, `detail` (1-10, imagetracerjs point count), `smoothing` (0-5, Chaikin iterations), `kerningPairs` (char pair → value), `glyphAdjustments` (char → {baseline, bearingLeft, bearingRight}).
 - `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
 - `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`; exports `smoothnessToOpts(1-10)` for mapping Detail slider to imagetracerjs params; exports `chaikinSmooth(commands, iterations)` for post-processing path smoothing
-- `src/lib/glyph-utils.js` — shared glyph utilities: `computeGlyphWidth`, `computeSpaceWidth`, `traceCell` (used by pipeline, worker, Preview)
+- `src/lib/glyph-utils.js` — shared glyph utilities: `computeGlyphWidth`, `computeSpaceWidth`, `traceCell`, `normalizeBaselines`, `commandsToSvgPath` (used by pipeline, worker, Preview, GlyphGallery, CharMap)
 - `src/lib/redetect-columns.js` — shared `redetectColumnsForRows()` (used by worker and compute fallback)
 - `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `detail`, `smoothing`
 - `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font (options includes `glyphAdjustments`); `applyGlyphAdjustments(commands, width, adj)` shifts coords/width; `injectGposTable(buffer, pairs)` builds GPOS kern feature for browsers; `injectKernTable(buffer, pairs)` builds legacy kern table; `downloadFont(font, filename, kerningMap)` injects both tables
@@ -40,7 +40,7 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 ```bash
 npm run dev            # Start dev server
 npm run build          # Run tests + production build
-npm run test           # Run vitest (72 tests: 61 unit + 11 e2e)
+npm run test           # Run vitest (78 tests: 67 unit + 11 e2e)
 npm run test:coverage  # Run tests with v8 coverage report
 npm run deploy         # Run tests + build + publish to GitHub Pages via gh-pages
 ```
@@ -54,13 +54,13 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 
 ## Workflow Rules
 
-- **Always run tests before committing**: `npx vitest run` — all 72 tests must pass before any commit or deploy.
+- **Always run tests before committing**: `npx vitest run` — all 78 tests must pass before any commit or deploy.
 - **Always run build after code changes**: `npx vite build` — verify no build errors before committing.
 - **Record discoveries**: When you find a bug, gotcha, or important insight, immediately update MEMORY.md and/or CLAUDE.md so it persists across sessions.
 
 ## Testing
 
-- **Unit tests** (61) — segmentation, tracing (incl. chaikinSmooth), font-builder, glyph adjustments, kern+GPOS injection, pipeline, glyph-utils, errors
+- **Unit tests** (67) — segmentation, tracing (incl. chaikinSmooth), font-builder, glyph adjustments, kern+GPOS injection, pipeline, glyph-utils (incl. normalizeBaselines, commandsToSvgPath), errors
 - **E2E tests** (11) — real `font.png` (gitignored, auto-skips when missing):
   - Full pipeline: detect → crop → trace → build TTF → parse → render → IoU compare
   - Bbox-normalized IoU: avg ~0.68, thresholds: per-glyph ≥0.20, avg ≥0.30
@@ -80,6 +80,7 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 - **Kerning**: opentype.js cannot write kern/GPOS tables. opentype.js produces CFF (OTTO) fonts, and browsers ignore `kern` tables in CFF fonts — they only read GPOS. `injectGposTable` builds a GPOS table with PairPosFormat1 under a 'kern' feature. `injectKernTable` builds a legacy kern table for older renderers. Both are injected into the SFNT. Pairs use glyph indices, sorted by left glyph.
 - **Detail & Smoothing (two sliders)**: Detail slider (1-10) maps via `smoothnessToOpts()` to imagetracerjs params — controls number of traced points. Higher = fewer, simpler paths. Smoothing slider (0-5) controls `chaikinSmooth()` iterations — Chaikin's corner-cutting algorithm that rounds off sharp corners by inserting points at 25%/75% along segments, converging to a B-spline. Both threaded through pipeline.js, compute-worker.js, and Preview retrace. `blurradius` is always 0 — B&W blur causes stairstepping artifacts.
 - **Baseline detection**: `findBaselineInRow(hProj, start, end)` uses cumulative ink mass (85% threshold) instead of fixed 75% heuristic, for better cross-row alignment. `cropCell` uses tight seed margin (`max(2, h*0.03)`) for flood-fill baseline filter — descenders are reached via connected ink, not by extending the seed zone.
+- **Baseline normalization**: `normalizeBaselines(entries)` in glyph-utils.js aligns all non-descender reference characters (a-z sans gjpqy, A-Z, 0-9) to a median min-Y. Descender/punctuation characters shift by the average correction. Runs after tracing in both pipeline.js and compute-worker.js. Fixes per-character baseline drift within rows.
 - **.notdef winding**: Outer CW, inner CCW in Y-up. Previously was backwards causing some renderers to misinterpret font conventions.
 
 ## Deployment

@@ -5,7 +5,7 @@
  */
 import { autoDetectGrid, detectColumns, cropCell } from './segmentation.js';
 import { smoothnessToOpts } from './tracing.js';
-import { traceCell, computeSpaceWidth } from './glyph-utils.js';
+import { traceCell, computeSpaceWidth, normalizeBaselines } from './glyph-utils.js';
 import { redetectColumnsForRows } from './redetect-columns.js';
 
 let aborted = false;
@@ -114,6 +114,9 @@ self.onmessage = async function (e) {
           // Progress every cell
           self.postMessage({ id, type: 'progress', current: i + 1, total });
         }
+
+        // Normalize baselines so all characters align consistently
+        normalizeBaselines(entries);
 
         // Auto-generate space width
         const spaceWidth = computeSpaceWidth(entries, payload.spaceWidthPercent ?? 60);

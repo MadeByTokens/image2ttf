@@ -2,6 +2,9 @@
   import { appState } from '../lib/store.svelte.js';
   import { generateThumbnailsAsync, abortCompute } from '../lib/compute.js';
   import { createLogger } from '../lib/logger.js';
+  import { commandsToSvgPath } from '../lib/glyph-utils.js';
+  import { applyGlyphAdjustments } from '../lib/font-builder.js';
+  import { ASCENDER, EM_SQUARE } from '../lib/constants.js';
 
   const logger = createLogger('CharMap');
 
@@ -218,10 +221,12 @@
       </div>
 
       <!-- Visual preview with adjustment guides -->
-      {#if adjustingThumb?.dataUrl && adjustingAdj}
+      {#if adjustingAdj}
         {@const bl = adjustingAdj.baseline}
         {@const bL = adjustingAdj.bearingLeft}
         {@const bR = adjustingAdj.bearingRight}
+        {@const glyphData = appState.glyphPaths?.get(adjustingChar)}
+        {@const hasTracedPath = glyphData?.commands?.length > 0}
         {@const scale = 0.12}
         {@const imgShiftY = -bl * scale}
         {@const leftW = Math.max(0, bL * scale)}
@@ -241,18 +246,31 @@
                           {bR > 0 ? 'bg-blue-200 dark:bg-blue-900/30 border-blue-400' : 'bg-red-200 dark:bg-red-900/30 border-red-400'}"
                    style="width: {Math.abs(bR * scale)}px;"></div>
             {/if}
-            <!-- Baseline reference line (fixed) -->
-            <div class="absolute left-0 right-0 border-t border-dashed border-gray-300 dark:border-gray-600"
-                 style="top: 75%;"></div>
-            <!-- Glyph image (shifts with baseline) -->
-            <div class="absolute inset-0 flex items-center justify-center transition-transform"
-                 style="transform: translateY({imgShiftY}px); padding-left: {leftW}px; padding-right: {rightW}px;">
-              <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
-            </div>
-            <!-- Adjusted baseline line -->
-            {#if bl !== 0}
-              <div class="absolute left-0 right-0 border-t-2 border-amber-500 dark:border-amber-400 transition-all"
-                   style="top: calc(75% + {imgShiftY}px);"></div>
+            {#if hasTracedPath}
+              <!-- SVG glyph preview (accurate font coordinates) -->
+              {@const adjResult = applyGlyphAdjustments(glyphData.commands, glyphData.width, adjustingAdj)}
+              {@const svgD = commandsToSvgPath(adjResult.commands)}
+              {@const baselineSvgY = ASCENDER - (EM_SQUARE * 0.10)}
+              <svg viewBox="-50 -50 1100 1100" class="absolute inset-0 w-full h-full">
+                <!-- Baseline reference line -->
+                <line x1="-50" y1={baselineSvgY} x2="1150" y2={baselineSvgY}
+                      stroke="currentColor" stroke-width="3" stroke-dasharray="12,8"
+                      class="text-gray-300 dark:text-gray-600" />
+                <path d={svgD} fill="currentColor" class="text-gray-800 dark:text-gray-200" />
+              </svg>
+            {:else if adjustingThumb?.dataUrl}
+              <!-- Fallback: thumbnail image (before tracing) -->
+              <!-- Baseline reference line (approximate) -->
+              <div class="absolute left-0 right-0 border-t border-dashed border-gray-300 dark:border-gray-600"
+                   style="top: 75%;"></div>
+              <div class="absolute inset-0 flex items-center justify-center transition-transform"
+                   style="transform: translateY({imgShiftY}px); padding-left: {leftW}px; padding-right: {rightW}px;">
+                <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
+              </div>
+              {#if bl !== 0}
+                <div class="absolute left-0 right-0 border-t-2 border-amber-500 dark:border-amber-400 transition-all"
+                     style="top: calc(75% + {imgShiftY}px);"></div>
+              {/if}
             {/if}
           </div>
         </div>

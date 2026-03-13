@@ -1,6 +1,6 @@
 import { smoothnessToOpts } from './tracing.js';
 import { createLogger } from './logger.js';
-import { traceCell, computeSpaceWidth } from './glyph-utils.js';
+import { traceCell, computeSpaceWidth, normalizeBaselines } from './glyph-utils.js';
 
 const logger = createLogger('pipeline');
 
@@ -46,8 +46,15 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
     }
   }
 
+  // Normalize baselines so all characters align consistently
+  const glyphEntries = [...glyphMap.entries()].map(([char, data]) => ({ char, commands: data.commands, width: data.width }));
+  normalizeBaselines(glyphEntries);
+  for (const entry of glyphEntries) {
+    glyphMap.set(entry.char, { commands: entry.commands, width: entry.width });
+  }
+
   // Auto-generate space width from average lowercase advance width
-  const entries = [...glyphMap.entries()].map(([char, data]) => ({ char, width: data.width }));
+  const entries = glyphEntries.map(e => ({ char: e.char, width: e.width }));
   const spaceWidth = computeSpaceWidth(entries, opts.spaceWidthPercent ?? 60);
   glyphMap.set(' ', { commands: [], width: spaceWidth });
 

@@ -1,23 +1,8 @@
 <script>
-  import { ASCENDER } from '../lib/constants.js';
   import { applyGlyphAdjustments } from '../lib/font-builder.js';
+  import { commandsToSvgPath } from '../lib/glyph-utils.js';
 
   let { glyphEntries = [], selectedGlyph = $bindable(null), onretrace, ondelete, glyphAdjustments = {} } = $props();
-
-  function commandsToSvgPath(commands) {
-    const fy = (y) => ASCENDER - y;
-    let d = '';
-    for (const cmd of commands) {
-      switch (cmd.type) {
-        case 'M': d += `M${cmd.x} ${fy(cmd.y)} `; break;
-        case 'L': d += `L${cmd.x} ${fy(cmd.y)} `; break;
-        case 'Q': d += `Q${cmd.x1} ${fy(cmd.y1)} ${cmd.x} ${fy(cmd.y)} `; break;
-        case 'C': d += `C${cmd.x1} ${fy(cmd.y1)} ${cmd.x2} ${fy(cmd.y2)} ${cmd.x} ${fy(cmd.y)} `; break;
-        case 'Z': d += 'Z '; break;
-      }
-    }
-    return d.trim();
-  }
 
   const displayEntries = $derived(glyphEntries.map(e => {
     const adj = glyphAdjustments[e.char];
