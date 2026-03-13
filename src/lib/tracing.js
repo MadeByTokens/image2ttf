@@ -3,21 +3,25 @@ import { EM_SQUARE } from './constants.js';
 
 /**
  * Map a smoothness value (1-10) to imagetracerjs tracing options.
- * 1 = precise/detailed (many segments), 10 = very smooth (flowing curves)
+ * 1 = precise/detailed (many short segments), 10 = very smooth (fewer, longer curves)
+ *
+ * For B&W handwriting, smoothness comes from HIGHER ltres/qtres values
+ * (more tolerance = fewer path nodes = smoother curves). Blur is always off
+ * because blurring B&W images creates stairstepping artifacts after requantization.
  */
 export function smoothnessToOpts(smoothness = 5) {
   const s = Math.max(1, Math.min(10, smoothness));
   const t = (s - 1) / 9; // 0..1
-  // ltres: 2.0 → 0.01 (lower = more curves instead of lines)
-  const ltres = Math.round((2.0 * Math.pow(0.005, t)) * 1000) / 1000;
-  // qtres: 2.0 → 0.5 (keep curves reasonably precise)
-  const qtres = Math.round((2.0 * Math.pow(0.25, t)) * 1000) / 1000;
+  // ltres: 0.5 → 5.0 (higher = more aggressive line simplification = smoother)
+  const ltres = Math.round((0.5 + t * 4.5) * 1000) / 1000;
+  // qtres: 0.5 → 3.0 (higher = more tolerance in curve fitting = smoother)
+  const qtres = Math.round((0.5 + t * 2.5) * 1000) / 1000;
   return {
     ltres,
     qtres,
-    rightangleenhance: s < 7,
-    blurradius: s >= 9 ? s - 7 : 0,
-    pathomit: Math.round(8 - t * 6),
+    rightangleenhance: s < 4,
+    blurradius: 0, // never blur B&W — causes stairstepping artifacts
+    pathomit: Math.round(2 + t * 6), // 2 → 8 (higher smoothness = remove more small noise)
   };
 }
 

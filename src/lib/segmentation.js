@@ -223,6 +223,36 @@ export function detectColumns(imageData, rowBound, opts = {}) {
  * - Too many runs → merge the closest pairs (smallest gap)
  * - Too few runs → split the tallest runs at their deepest valley
  */
+/**
+ * Find the baseline Y within a row using the horizontal projection.
+ * The baseline is where the main ink mass ends — the bottom of character
+ * bodies, above any descender zone.
+ *
+ * Uses the cumulative ink mass: the baseline sits at the Y where ~85% of
+ * the total ink is above. This works better than a fixed 75% because it
+ * adapts to the actual content (rows with ascenders vs. without).
+ * Falls back to 75% of row height if projection is empty.
+ */
+function findBaselineInRow(hProj, rowStart, rowEnd) {
+  const rowH = rowEnd - rowStart;
+  if (rowH <= 0) return Math.round(rowStart + rowH * 0.75);
+
+  const slice = hProj.slice(rowStart, rowEnd);
+  const total = slice.reduce((s, v) => s + v, 0);
+  if (total === 0) return Math.round(rowStart + rowH * 0.75);
+
+  // Find the Y where 85% of ink mass is above
+  const target = total * 0.85;
+  let cumulative = 0;
+  for (let y = 0; y < slice.length; y++) {
+    cumulative += slice[y];
+    if (cumulative >= target) {
+      return rowStart + y;
+    }
+  }
+  return Math.round(rowStart + rowH * 0.75);
+}
+
 function adjustToExpectedCount(runs, expected, projection, minSize) {
   if (runs.length === expected || expected <= 0) return runs;
 
@@ -288,15 +318,19 @@ export function autoDetectGrid(imageData, opts = {}) {
 
   let rows = detectRows(imageData, opts);
 
+  // Compute horizontal projection once — used for hints and baseline detection
+  const hProj = horizontalProjection(imageData, darkPixelThreshold);
+
   // Adjust row count if hints are provided
   if (expectedRows && rows.length !== expectedRows) {
-    const hProj = horizontalProjection(imageData, darkPixelThreshold);
     rows = adjustToExpectedCount(rows, expectedRows, hProj, minRowHeight);
   }
 
-  // Add baselines to rows (~75% down from top, leaving room for descenders)
+  // Detect baselines from horizontal projection — the Y where the main ink
+  // mass ends (bottom of character bodies, above descender zone).
+  // Falls back to 75% of row height if projection-based detection fails.
   for (const row of rows) {
-    row.baseline = Math.round(row.start + (row.end - row.start) * 0.75);
+    row.baseline = findBaselineInRow(hProj, row.start, row.end);
   }
 
   // Compute clip bounds for column detection using baseline midpoints
@@ -390,7 +424,9 @@ export function cropCell(sourceCanvas, rect) {
   if (rect.baseline != null && hasContent) {
     const baselineLocal = Math.round(rect.baseline - y);
     // Primary zone: top of cell to baseline + small margin (catches round bottoms)
-    const margin = Math.round(Math.max(5, baselineLocal * 0.1));
+    // Keep margin small (2px min, 3% of cell height) so we don't include the full
+    // descender zone — the flood fill will reach connected descenders naturally.
+    const margin = Math.round(Math.max(2, h * 0.03));
     const primaryBottom = Math.min(h, baselineLocal + margin);
 
     // Flood fill from dark pixels in primary zone to find connected content

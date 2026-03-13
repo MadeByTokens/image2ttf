@@ -18,14 +18,14 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 5. **Generate** → builds final TTF via opentype.js with GPOS+kern table injection, offers download
 
 ### Key files
-- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`. Has `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value), `glyphAdjustments` (char → {baseline, bearingLeft, bearingRight}).
+- `src/lib/store.svelte.js` — global state via `appState` (NOT `state`), exports `resyncCharMap()`, `getCharset()`. Has `charLayout` (string[] for character grid layout), `spaceWidthPercent`, `smoothness` (1-10), `kerningPairs` (char pair → value), `glyphAdjustments` (char → {baseline, bearingLeft, bearingRight}).
 - `src/lib/segmentation.js` — grid detection with `opts` param; exports `autoDetectGrid`, `detectColumns`, `detectRows`, `cropCell`
 - `src/lib/tracing.js` — imagetracerjs wrapper; `svgPathToOpentypePath(svgPaths, w, h, em, metrics)` where `metrics = { cellHeight, trimOffsetY }`; exports `smoothnessToOpts(1-10)` for mapping slider to imagetracerjs params
 - `src/lib/glyph-utils.js` — shared glyph utilities: `computeGlyphWidth`, `computeSpaceWidth`, `traceCell` (used by pipeline, worker, Preview)
 - `src/lib/redetect-columns.js` — shared `redetectColumnsForRows()` (used by worker and compute fallback)
 - `src/lib/pipeline.js` — `runTracing(grid, charMap, canvas, onProgress, opts)` — opts includes `spaceWidthPercent`, `smoothness`
 - `src/lib/font-builder.js` — `createFont(glyphMap, options)` builds opentype.Font (options includes `glyphAdjustments`); `applyGlyphAdjustments(commands, width, adj)` shifts coords/width; `injectGposTable(buffer, pairs)` builds GPOS kern feature for browsers; `injectKernTable(buffer, pairs)` builds legacy kern table; `downloadFont(font, filename, kerningMap)` injects both tables
-- `src/lib/constants.js` — default thresholds, font metrics, DEFAULT_CHARSET
+- `src/lib/constants.js` — default thresholds, font metrics, `DEFAULT_CHAR_LAYOUT`, `DEFAULT_CHARSET` (derived from layout)
 - `src/lib/errors.js` — custom error classes: `ImageLoadError`, `GridDetectionError`, `TracingError`, `FontBuildError`
 - `src/lib/logger.js` — structured logger toggled via `localStorage.setItem('debug', '1')`
 - `src/lib/compute-worker.js` — Web Worker for heavy computation (grid detect, thumbnails, tracing)
@@ -78,7 +78,8 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 - **Space glyph**: Auto-generated via `computeSpaceWidth()` in glyph-utils.js from avg lowercase width × `spaceWidthPercent`. Configurable via slider in CharMap.
 - **Version**: Injected from package.json via Vite `define` (`__APP_VERSION__`), displayed in footer.
 - **Kerning**: opentype.js cannot write kern/GPOS tables. opentype.js produces CFF (OTTO) fonts, and browsers ignore `kern` tables in CFF fonts — they only read GPOS. `injectGposTable` builds a GPOS table with PairPosFormat1 under a 'kern' feature. `injectKernTable` builds a legacy kern table for older renderers. Both are injected into the SFNT. Pairs use glyph indices, sorted by left glyph.
-- **Smoothness**: `smoothnessToOpts(1-10)` maps slider to imagetracerjs params (`ltres`, `qtres`, `rightangleenhance`, `blurradius`, `pathomit`). Threaded through pipeline.js and Preview retrace.
+- **Smoothness**: `smoothnessToOpts(1-10)` maps slider to imagetracerjs params. Higher smoothness = higher `ltres`/`qtres` (more path simplification = fewer, longer segments = smoother curves). `blurradius` is always 0 — B&W blur causes stairstepping artifacts. `rightangleenhance` only at low smoothness (s<4). Threaded through pipeline.js and Preview retrace.
+- **Baseline detection**: `findBaselineInRow(hProj, start, end)` uses cumulative ink mass (85% threshold) instead of fixed 75% heuristic, for better cross-row alignment. `cropCell` uses tight seed margin (`max(2, h*0.03)`) for flood-fill baseline filter — descenders are reached via connected ink, not by extending the seed zone.
 - **.notdef winding**: Outer CW, inner CCW in Y-up. Previously was backwards causing some renderers to misinterpret font conventions.
 
 ## Deployment
