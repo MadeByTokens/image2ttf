@@ -1,5 +1,6 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
+  import { DEFAULT_CHAR_LAYOUT } from '../lib/constants.js';
   import { ImageLoadError } from '../lib/errors.js';
 
   let dragOver = $state(false);
@@ -166,6 +167,21 @@
     }
   }
 
+  // Character layout — one line per row
+  let layoutText = $state(appState.charLayout.join('\n'));
+  let layoutCollapsed = $state(true);
+
+  function onLayoutChange(e) {
+    layoutText = e.target.value;
+    // Parse non-empty lines into charLayout
+    const lines = layoutText.split('\n').filter(l => l.length > 0);
+    appState.charLayout = lines.length > 0 ? lines : [...DEFAULT_CHAR_LAYOUT];
+  }
+
+  const layoutCharCount = $derived(
+    layoutText.split('\n').filter(l => l.length > 0).reduce((s, l) => s + l.length, 0)
+  );
+
   const cursorClass = $derived(
     mode === 'pan' ? (dragging ? 'cursor-grabbing' : 'cursor-grab') :
     mode === 'rotate' ? 'cursor-ew-resize' :
@@ -282,6 +298,40 @@
       <p class="text-sm text-green-600 dark:text-green-400">
         Image loaded ({appState.imageCanvas?.width || 0} &times; {appState.imageCanvas?.height || 0}px)
       </p>
+
+      <!-- Character layout input -->
+      <div class="w-full max-w-lg">
+        <button
+          onclick={() => { layoutCollapsed = !layoutCollapsed; }}
+          class="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+        >
+          <svg class="w-4 h-4 transition-transform {layoutCollapsed ? '' : 'rotate-90'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          Character layout ({layoutCharCount} chars, {layoutText.split('\n').filter(l => l.length > 0).length} rows)
+        </button>
+
+        {#if !layoutCollapsed}
+          <div class="mt-2 flex flex-col gap-1.5">
+            <p class="text-xs text-gray-400 dark:text-gray-500">
+              Type the characters as they appear in your image, one row per line.
+              This helps grid detection and sets the correct labels.
+            </p>
+            <textarea
+              value={layoutText}
+              oninput={onLayoutChange}
+              rows="6"
+              spellcheck="false"
+              autocomplete="off"
+              class="w-full font-mono text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200
+                     focus:ring-2 focus:ring-teal-500 focus:border-teal-500 focus:outline-none
+                     resize-y"
+              aria-label="Character layout — one row per line"
+            ></textarea>
+          </div>
+        {/if}
+      </div>
     </div>
   {/if}
 

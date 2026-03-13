@@ -219,6 +219,53 @@ export function detectColumns(imageData, rowBound, opts = {}) {
 }
 
 /**
+ * Adjust a list of runs to match an expected count by splitting or merging.
+ * - Too many runs → merge the closest pairs (smallest gap)
+ * - Too few runs → split the tallest runs at their deepest valley
+ */
+function adjustToExpectedCount(runs, expected, projection, minSize) {
+  if (runs.length === expected || expected <= 0) return runs;
+
+  if (runs.length > expected) {
+    // Merge the closest pairs
+    while (runs.length > expected && runs.length > 1) {
+      let minGap = Infinity, minIdx = 0;
+      for (let i = 0; i < runs.length - 1; i++) {
+        const gap = runs[i + 1].start - runs[i].end;
+        if (gap < minGap) { minGap = gap; minIdx = i; }
+      }
+      runs[minIdx] = { start: runs[minIdx].start, end: runs[minIdx + 1].end };
+      runs.splice(minIdx + 1, 1);
+    }
+  } else {
+    // Split the tallest runs at their deepest valley
+    while (runs.length < expected) {
+      let maxH = 0, maxIdx = 0;
+      for (let i = 0; i < runs.length; i++) {
+        const h = runs[i].end - runs[i].start;
+        if (h > maxH) { maxH = h; maxIdx = i; }
+      }
+      const run = runs[maxIdx];
+      // Try to find a valley with a relaxed depth threshold
+      const splitPt = findValley(projection, run.start, run.end, 0.1);
+      if (splitPt > 0 && splitPt - run.start >= minSize && run.end - splitPt >= minSize) {
+        runs.splice(maxIdx, 1, { start: run.start, end: splitPt }, { start: splitPt, end: run.end });
+      } else {
+        // No good valley — force split at midpoint
+        const mid = Math.round((run.start + run.end) / 2);
+        if (mid - run.start >= minSize && run.end - mid >= minSize) {
+          runs.splice(maxIdx, 1, { start: run.start, end: mid }, { start: mid, end: run.end });
+        } else {
+          break; // Can't split further
+        }
+      }
+    }
+  }
+
+  return runs;
+}
+
+/**
  * Auto-detect the full grid of character cells
  * Returns { rows: [{start, end, baseline}], cells: [[{x, y, w, h}]] }
  *
@@ -226,9 +273,26 @@ export function detectColumns(imageData, rowBound, opts = {}) {
  * from the row top. Column detection uses baseline midpoints as clip bounds
  * to avoid false positives from descenders/ascenders overlapping into
  * adjacent rows.
+ *
+ * Optional hints via opts:
+ * - expectedRows: target number of rows
+ * - expectedColsPerRow: array of expected column counts (one per row)
  */
 export function autoDetectGrid(imageData, opts = {}) {
-  const rows = detectRows(imageData, opts);
+  const { expectedRows, expectedColsPerRow } = opts;
+  const {
+    darkPixelThreshold = DARK_PIXEL_THRESHOLD,
+    minRowHeight = MIN_ROW_HEIGHT,
+    minColWidth = MIN_COL_WIDTH
+  } = opts;
+
+  let rows = detectRows(imageData, opts);
+
+  // Adjust row count if hints are provided
+  if (expectedRows && rows.length !== expectedRows) {
+    const hProj = horizontalProjection(imageData, darkPixelThreshold);
+    rows = adjustToExpectedCount(rows, expectedRows, hProj, minRowHeight);
+  }
 
   // Add baselines to rows (~75% down from top, leaving room for descenders)
   for (const row of rows) {
@@ -247,7 +311,13 @@ export function autoDetectGrid(imageData, opts = {}) {
 
     // Detect columns using clipped bounds (avoids overlap interference)
     const clipBound = { start: clipTop, end: clipBottom };
-    const cols = detectColumns(imageData, clipBound, opts);
+    let cols = detectColumns(imageData, clipBound, opts);
+
+    // Adjust column count if hints are provided for this row
+    if (expectedColsPerRow && expectedColsPerRow[i] && cols.length !== expectedColsPerRow[i]) {
+      const vProj = verticalProjection(imageData, clipBound.start, clipBound.end, darkPixelThreshold);
+      cols = adjustToExpectedCount(cols, expectedColsPerRow[i], vProj, minColWidth);
+    }
 
     // Cell bboxes use full row extent but carry baseline for overlap filtering
     const rowCells = cols.map(col => ({

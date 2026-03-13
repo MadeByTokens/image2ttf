@@ -1,7 +1,7 @@
 <script>
-  import { appState, setError, resyncCharMap } from '../lib/store.svelte.js';
+  import { appState, setError, resyncCharMap, getCharset } from '../lib/store.svelte.js';
   import { detectGridAsync, redetectColumnsAsync, abortCompute } from '../lib/compute.js';
-  import { DEFAULT_CHARSET, DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
+  import { DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
   import { onMount, untrack } from 'svelte';
   import ContextMenu from './grid/ContextMenu.svelte';
   import AdvancedPanel from './grid/AdvancedPanel.svelte';
@@ -30,13 +30,20 @@
     if (!appState.imageCanvas) return;
     computing = true;
     try {
+      // Build detection hints from charLayout
+      const layout = appState.charLayout;
+      const hints = (layout && layout.length > 0 && layout.some(r => r.length > 0))
+        ? { expectedRows: layout.length, expectedColsPerRow: layout.map(r => r.length) }
+        : {};
+
       const grid = await detectGridAsync(appState.imageCanvas, {
         darkPixelThreshold: darkThreshold,
         rowDensityThreshold: rowDensity,
         colDensityThreshold: colDensity,
         minRowHeight: minRowH,
         minColWidth: minColW,
-        minGapFraction: gapFraction
+        minGapFraction: gapFraction,
+        ...hints
       });
 
       if (grid.cells.length === 0) {
@@ -46,7 +53,10 @@
 
       appState.grid = grid;
       const flatCells = grid.cells.flat();
-      appState.charMap = DEFAULT_CHARSET.slice(0, flatCells.length);
+      const charset = getCharset();
+      appState.charMap = charset.slice(0, flatCells.length);
+      // Pad with '?' if layout has fewer chars than detected cells
+      while (appState.charMap.length < flatCells.length) appState.charMap.push('?');
       appState.glyphAdjustments = {};
       selectedCell = null;
       contextMenu = null;
@@ -139,7 +149,8 @@
 
     appState.grid = { rows, cells };
     const totalCells = numRows * numCols;
-    appState.charMap = DEFAULT_CHARSET.slice(0, totalCells);
+    const charset = getCharset();
+    appState.charMap = charset.slice(0, totalCells);
     while (appState.charMap.length < totalCells) {
       appState.charMap.push('?');
     }
@@ -768,14 +779,15 @@
     }
   }
 
-  /** Relabel from a given cell onward using DEFAULT_CHARSET starting at a given char */
+  /** Relabel from a given cell onward using charset starting at a given char */
   function relabelFrom(rowIdx, colIdx, startChar) {
     const flatIdx = getFlatIndex(rowIdx, colIdx);
     if (flatIdx < 0) return;
-    const charsetIdx = DEFAULT_CHARSET.indexOf(startChar);
+    const charset = getCharset();
+    const charsetIdx = charset.indexOf(startChar);
     if (charsetIdx < 0) return;
-    for (let i = flatIdx, ci = charsetIdx; i < appState.charMap.length && ci < DEFAULT_CHARSET.length; i++, ci++) {
-      appState.charMap[i] = DEFAULT_CHARSET[ci];
+    for (let i = flatIdx, ci = charsetIdx; i < appState.charMap.length && ci < charset.length; i++, ci++) {
+      appState.charMap[i] = charset[ci];
     }
     appState.charMap = [...appState.charMap];
     drawOverlay();

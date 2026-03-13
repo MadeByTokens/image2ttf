@@ -1,4 +1,4 @@
-import { DEFAULT_CHARSET } from './constants.js';
+import { DEFAULT_CHARSET, DEFAULT_CHAR_LAYOUT } from './constants.js';
 
 // Svelte 5 runes-based global state
 export const appState = $state({
@@ -12,6 +12,7 @@ export const appState = $state({
   smoothness: 5,             // 1 = precise, 10 = very smooth curves
   glyphAdjustments: {},        // e.g. { "A": { baseline: 20, bearingLeft: 10, bearingRight: 5 } }
   kerningPairs: {},           // e.g. { "AV": -80, "To": -40 }
+  charLayout: [...DEFAULT_CHAR_LAYOUT], // one string per row, user-editable
   fontName: 'MyHandwriting',
   generatedFont: null,       // opentype.Font object
   isProcessing: false,
@@ -48,9 +49,17 @@ export function setTheme(theme) {
   applyTheme(theme);
 }
 
+/** Get the flat charset from charLayout (user-typed) or fall back to DEFAULT_CHARSET */
+export function getCharset() {
+  if (appState.charLayout && appState.charLayout.length > 0) {
+    return appState.charLayout.flatMap(row => row.split(''));
+  }
+  return DEFAULT_CHARSET;
+}
+
 /**
  * Resync charMap to match the current grid cell count.
- * Extends from DEFAULT_CHARSET or truncates as needed.
+ * Extends from charLayout (user-typed) or DEFAULT_CHARSET, or truncates as needed.
  */
 export function resyncCharMap() {
   if (!appState.grid) return;
@@ -59,10 +68,11 @@ export function resyncCharMap() {
 
   if (current.length === totalCells) return;
 
+  const charset = getCharset();
   if (current.length < totalCells) {
-    // Extend with characters from DEFAULT_CHARSET that aren't already used
+    // Extend with characters from charset that aren't already used
     const needed = totalCells - current.length;
-    const available = DEFAULT_CHARSET.filter(c => !current.includes(c));
+    const available = charset.filter(c => !current.includes(c));
     const extra = available.slice(0, needed);
     // If we still need more, fill with '?'
     while (extra.length < needed) extra.push('?');
