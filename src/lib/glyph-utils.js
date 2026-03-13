@@ -3,7 +3,7 @@
  * Eliminates 3-way code duplication for glyph width computation, space width, and cell tracing.
  */
 import { cropCell } from './segmentation.js';
-import { traceGlyph, svgPathToOpentypePath, cleanupPaths, smoothnessToOpts } from './tracing.js';
+import { traceGlyph, svgPathToOpentypePath, cleanupPaths, chaikinSmooth, smoothnessToOpts } from './tracing.js';
 import { EM_SQUARE } from './constants.js';
 
 /**
@@ -43,14 +43,15 @@ export function computeSpaceWidth(entries, spaceWidthPercent = 60, emSquare = EM
 }
 
 /**
- * Trace a single cell: crop → trace → scale → cleanup → compute width.
+ * Trace a single cell: crop → trace → scale → cleanup → smooth → compute width.
  * @param {HTMLCanvasElement|OffscreenCanvas} sourceCanvas - source image canvas
  * @param {object} cell - cell rectangle {x, y, w, h}
  * @param {number} refHeight - reference height for uniform scaling
  * @param {object} [tracingOpts] - options for imagetracerjs
+ * @param {number} [smoothing=0] - Chaikin corner-cutting iterations (0 = none)
  * @returns {{commands: Array, width: number}|null} glyph data or null if empty/failed
  */
-export function traceCell(sourceCanvas, cell, refHeight, tracingOpts = {}) {
+export function traceCell(sourceCanvas, cell, refHeight, tracingOpts = {}, smoothing = 0) {
   const cropped = cropCell(sourceCanvas, cell);
   if (cropped.empty) return null;
 
@@ -72,6 +73,7 @@ export function traceCell(sourceCanvas, cell, refHeight, tracingOpts = {}) {
   const cleaned = cleanupPaths(commands);
   if (cleaned.length === 0) return null;
 
-  const width = computeGlyphWidth(cleaned);
-  return { commands: cleaned, width };
+  const smoothed = chaikinSmooth(cleaned, smoothing);
+  const width = computeGlyphWidth(smoothed);
+  return { commands: smoothed, width };
 }

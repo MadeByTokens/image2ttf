@@ -90,8 +90,9 @@ self.onmessage = async function (e) {
         const charMap = payload.charMap;
         const total = Math.min(flatCells.length, charMap.length);
         const refHeight = Math.max(...flatCells.map(c => c.h));
-        const tracingOpts = payload.smoothness != null
-          ? smoothnessToOpts(payload.smoothness) : {};
+        const tracingOpts = payload.detail != null
+          ? smoothnessToOpts(payload.detail) : {};
+        const smoothing = payload.smoothing ?? 0;
         const entries = []; // [{char, commands, width}]
 
         for (let i = 0; i < total; i++) {
@@ -102,7 +103,7 @@ self.onmessage = async function (e) {
           if (!char || char === ' ') { continue; }
 
           try {
-            const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts);
+            const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts, smoothing);
             if (result) {
               entries.push({ char, commands: result.commands, width: result.width });
             }

@@ -429,6 +429,104 @@ function reverseContour(commands) {
 }
 
 /**
+ * Apply Chaikin's corner-cutting algorithm to smooth path commands.
+ * Each iteration replaces sharp corners with smoother curves by inserting
+ * points at 25% and 75% along each segment. Converges to a B-spline.
+ *
+ * @param {Array} commands - opentype path commands (M/L/Q/C/Z)
+ * @param {number} iterations - number of smoothing iterations (0 = no change)
+ * @returns {Array} smoothed path commands
+ */
+export function chaikinSmooth(commands, iterations = 0) {
+  if (iterations <= 0 || commands.length === 0) return commands;
+
+  // Split into contours
+  const contours = [];
+  let current = [];
+  for (const cmd of commands) {
+    current.push(cmd);
+    if (cmd.type === 'Z') {
+      contours.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) contours.push(current);
+
+  const result = [];
+  for (const contour of contours) {
+    result.push(...smoothContour(contour, iterations));
+  }
+  return result;
+}
+
+function smoothContour(contour, iterations) {
+  // Extract vertex positions (endpoints only — Q/C control points are skipped)
+  let points = [];
+  for (const cmd of contour) {
+    if (cmd.type !== 'Z' && cmd.x !== undefined && cmd.y !== undefined) {
+      points.push({ x: cmd.x, y: cmd.y });
+    }
+  }
+
+  if (points.length < 3) return contour; // can't smooth a triangle or less
+
+  const closed = contour[contour.length - 1]?.type === 'Z';
+
+  for (let iter = 0; iter < iterations; iter++) {
+    points = chaikinIteration(points, closed);
+  }
+
+  // Rebuild as M + L... + Z
+  const result = [];
+  if (points.length > 0) {
+    result.push({ type: 'M', x: points[0].x, y: points[0].y });
+    for (let i = 1; i < points.length; i++) {
+      result.push({ type: 'L', x: points[i].x, y: points[i].y });
+    }
+    if (closed) result.push({ type: 'Z' });
+  }
+  return result;
+}
+
+function chaikinIteration(points, closed) {
+  if (points.length < 2) return points;
+  const n = points.length;
+  const result = [];
+
+  if (closed) {
+    for (let i = 0; i < n; i++) {
+      const p0 = points[i];
+      const p1 = points[(i + 1) % n];
+      result.push({
+        x: Math.round((0.75 * p0.x + 0.25 * p1.x) * 100) / 100,
+        y: Math.round((0.75 * p0.y + 0.25 * p1.y) * 100) / 100
+      });
+      result.push({
+        x: Math.round((0.25 * p0.x + 0.75 * p1.x) * 100) / 100,
+        y: Math.round((0.25 * p0.y + 0.75 * p1.y) * 100) / 100
+      });
+    }
+  } else {
+    result.push(points[0]);
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      result.push({
+        x: Math.round((0.75 * p0.x + 0.25 * p1.x) * 100) / 100,
+        y: Math.round((0.75 * p0.y + 0.25 * p1.y) * 100) / 100
+      });
+      result.push({
+        x: Math.round((0.25 * p0.x + 0.75 * p1.x) * 100) / 100,
+        y: Math.round((0.25 * p0.y + 0.75 * p1.y) * 100) / 100
+      });
+    }
+    result.push(points[n - 1]);
+  }
+
+  return result;
+}
+
+/**
  * Remove noise paths (very small paths)
  */
 export function cleanupPaths(pathCommands, minArea = 50) {

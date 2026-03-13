@@ -39,7 +39,8 @@
         appState.charMap,
         {
           spaceWidthPercent: appState.spaceWidthPercent,
-          smoothness: appState.smoothness
+          detail: appState.detail,
+          smoothing: appState.smoothing
         },
         (current, total) => {
           appState.progress = current;
@@ -91,8 +92,8 @@
     try {
       const cell = flatCells[idx];
       const refHeight = Math.max(...flatCells.map(c => c.h));
-      const tracingOpts = smoothnessToOpts(appState.smoothness);
-      const result = traceCell(appState.imageCanvas, cell, refHeight, tracingOpts);
+      const tracingOpts = smoothnessToOpts(appState.detail);
+      const result = traceCell(appState.imageCanvas, cell, refHeight, tracingOpts, appState.smoothing);
 
       if (!result) {
         setError(`Cell for "${char}" is empty or produced no paths`);
@@ -212,18 +213,31 @@
       </button>
     </div>
 
-    <!-- Smoothness control -->
-    <div class="w-full max-w-sm flex flex-col items-center gap-1">
-      <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
-        Smoothness:
-        <input
-          type="range"
-          min="1"
-          max="10"
-          bind:value={appState.smoothness}
-          class="w-32"
-        />
-        <span class="text-xs text-gray-400 w-6 text-center">{appState.smoothness}</span>
+    <!-- Detail & Smoothness controls -->
+    <div class="w-full max-w-md flex flex-col items-center gap-2">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+          Detail:
+          <input
+            type="range"
+            min="1"
+            max="10"
+            bind:value={appState.detail}
+            class="w-24"
+          />
+          <span class="text-xs text-gray-400 w-6 text-center">{appState.detail}</span>
+        </label>
+        <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+          Smoothing:
+          <input
+            type="range"
+            min="0"
+            max="5"
+            bind:value={appState.smoothing}
+            class="w-24"
+          />
+          <span class="text-xs text-gray-400 w-4 text-center">{appState.smoothing}</span>
+        </label>
         <button
           onclick={() => { tracingStarted = false; traced = false; startTracing(); }}
           disabled={tracing}
@@ -231,9 +245,9 @@
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
                  disabled:opacity-40 disabled:cursor-not-allowed"
         >Re-trace</button>
-      </label>
+      </div>
       <p class="text-xs text-gray-400 dark:text-gray-500">
-        1 = precise details, 10 = smooth curves
+        Detail: 1 = many points, 10 = fewer points. Smoothing: 0 = sharp, 5 = very smooth curves.
       </p>
     </div>
 

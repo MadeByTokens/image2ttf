@@ -20,7 +20,8 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
   // Use a single reference height (max row height) for uniform scaling across all rows.
   // This ensures uppercase and lowercase maintain correct relative sizes.
   const refHeight = Math.max(...flatCells.map(c => c.h));
-  const tracingOpts = opts.smoothness != null ? smoothnessToOpts(opts.smoothness) : {};
+  const tracingOpts = opts.detail != null ? smoothnessToOpts(opts.detail) : {};
+  const smoothing = opts.smoothing ?? 0;
 
   for (let i = 0; i < total; i++) {
     const cell = flatCells[i];
@@ -29,7 +30,7 @@ export async function runTracing(grid, charMap, sourceCanvas, onProgress = () =>
     if (!char || char === ' ') continue;
 
     try {
-      const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts);
+      const result = traceCell(sourceCanvas, cell, refHeight, tracingOpts, smoothing);
       if (result) {
         glyphMap.set(char, result);
       }

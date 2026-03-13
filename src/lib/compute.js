@@ -169,7 +169,8 @@ export async function runTracingAsync(canvas, cells, charMap, opts = {}, onProgr
       height: canvas.height,
       cells: JSON.parse(JSON.stringify(cells)),
       charMap: [...charMap],
-      smoothness: opts.smoothness,
+      detail: opts.detail,
+      smoothing: opts.smoothing,
       spaceWidthPercent: opts.spaceWidthPercent
     }, onProgress);
 

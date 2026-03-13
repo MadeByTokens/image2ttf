@@ -9,7 +9,8 @@ export const appState = $state({
   charMap: [],               // flat array of characters
   glyphPaths: null,          // Map<string, {commands, width}>
   spaceWidthPercent: 60,     // space width as % of avg lowercase width (0 = auto)
-  smoothness: 5,             // 1 = precise, 10 = very smooth curves
+  detail: 5,                 // 1 = precise/many points, 10 = simplified/fewer points (imagetracerjs)
+  smoothing: 2,              // 0 = no smoothing, 1-5 = Chaikin corner-cutting iterations
   glyphAdjustments: {},        // e.g. { "A": { baseline: 20, bearingLeft: 10, bearingRight: 5 } }
   kerningPairs: {},           // e.g. { "AV": -80, "To": -40 }
   charLayout: [...DEFAULT_CHAR_LAYOUT], // one string per row, user-editable

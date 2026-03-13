@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { traceGlyph, svgPathToOpentypePath, cleanupPaths } from '../../src/lib/tracing.js';
+import { traceGlyph, svgPathToOpentypePath, cleanupPaths, chaikinSmooth } from '../../src/lib/tracing.js';
 import { createCanvas, ImageData } from 'canvas';
 
 describe('tracing', () => {
@@ -88,6 +88,83 @@ describe('tracing', () => {
       // Should keep only the large path
       const moveCount = cleaned.filter(c => c.type === 'M').length;
       expect(moveCount).toBe(1);
+    });
+  });
+
+  describe('chaikinSmooth', () => {
+    it('should return commands unchanged with 0 iterations', () => {
+      const commands = [
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 100, y: 0 },
+        { type: 'L', x: 100, y: 100 },
+        { type: 'L', x: 0, y: 100 },
+        { type: 'Z' },
+      ];
+      const result = chaikinSmooth(commands, 0);
+      expect(result).toEqual(commands);
+    });
+
+    it('should increase point count after smoothing', () => {
+      const commands = [
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 100, y: 0 },
+        { type: 'L', x: 100, y: 100 },
+        { type: 'L', x: 0, y: 100 },
+        { type: 'Z' },
+      ];
+      const smoothed = chaikinSmooth(commands, 1);
+      // 4 points → 8 points after one Chaikin iteration (closed contour)
+      expect(smoothed.length).toBeGreaterThan(commands.length);
+    });
+
+    it('should preserve contour structure (M...Z)', () => {
+      const commands = [
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 100, y: 0 },
+        { type: 'L', x: 100, y: 100 },
+        { type: 'L', x: 0, y: 100 },
+        { type: 'Z' },
+      ];
+      const smoothed = chaikinSmooth(commands, 2);
+      expect(smoothed[0].type).toBe('M');
+      expect(smoothed[smoothed.length - 1].type).toBe('Z');
+    });
+
+    it('should handle multiple contours independently', () => {
+      const commands = [
+        // Contour 1
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 50, y: 0 },
+        { type: 'L', x: 50, y: 50 },
+        { type: 'L', x: 0, y: 50 },
+        { type: 'Z' },
+        // Contour 2
+        { type: 'M', x: 200, y: 200 },
+        { type: 'L', x: 300, y: 200 },
+        { type: 'L', x: 300, y: 300 },
+        { type: 'L', x: 200, y: 300 },
+        { type: 'Z' },
+      ];
+      const smoothed = chaikinSmooth(commands, 1);
+      const moveCount = smoothed.filter(c => c.type === 'M').length;
+      const closeCount = smoothed.filter(c => c.type === 'Z').length;
+      expect(moveCount).toBe(2);
+      expect(closeCount).toBe(2);
+    });
+
+    it('should not smooth contours with fewer than 3 points', () => {
+      const commands = [
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 100, y: 100 },
+        { type: 'Z' },
+      ];
+      const smoothed = chaikinSmooth(commands, 3);
+      expect(smoothed).toEqual(commands);
+    });
+
+    it('should handle empty commands', () => {
+      const result = chaikinSmooth([], 2);
+      expect(result).toEqual([]);
     });
   });
 });
