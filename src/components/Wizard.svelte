@@ -9,8 +9,11 @@
   import CharMap from './CharMap.svelte';
   import Preview from './Preview.svelte';
   import Generate from './Generate.svelte';
+  import HelpDialog from './HelpDialog.svelte';
 
   const steps = ['Upload', 'Detect', 'Characters', 'Preview', 'Generate'];
+
+  let helpOpen = $state(false);
 
   onMount(() => {
     applyTheme(appState.theme);
@@ -49,9 +52,26 @@
       image2ttf
     </h1>
     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-      Convert handwriting to a font file
+      Create fonts from character grid images — handwriting, calligraphy, or custom designs
     </p>
   </header>
+
+  <!-- Help button (fixed position, top-left) -->
+  <button
+    onclick={() => { helpOpen = true; }}
+    class="fixed top-3 left-3 z-40 w-8 h-8 rounded-full border border-gray-300 dark:border-gray-600
+           bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400
+           hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400
+           shadow-sm hover:shadow transition-all flex items-center justify-center"
+    aria-label="Help for current step"
+    title="Help"
+  >
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
+    </svg>
+  </button>
+
+  <HelpDialog step={appState.currentStep} bind:open={helpOpen} />
 
   <!-- Progress -->
   <div class="px-4 pt-4">
