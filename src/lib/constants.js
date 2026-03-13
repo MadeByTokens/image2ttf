@@ -1,13 +1,13 @@
 // Default character set matching the expected font.png layout
 export const DEFAULT_CHARSET = [
-  // Row 1: lowercase a-v
-  ...'abcdefghijklmnopqrstuv'.split(''),
-  // Row 2: lowercase w-z
-  ...'wxyz'.split(''),
-  // Row 3: uppercase A-V
-  ...'ABCDEFGHIJKLMNOPQRSTUV'.split(''),
-  // Row 4: uppercase W-Z
-  ...'WXYZ'.split(''),
+  // Row 1: lowercase a-m
+  ...'abcdefghijklm'.split(''),
+  // Row 2: lowercase n-z
+  ...'nopqrstuvwxyz'.split(''),
+  // Row 3: uppercase A-M
+  ...'ABCDEFGHIJKLM'.split(''),
+  // Row 4: uppercase N-Z
+  ...'NOPQRSTUVWXYZ'.split(''),
   // Row 5: symbols and digits
   ..."@!1234567890$.,'\"-():;".split('')
 ];
