@@ -13,14 +13,15 @@ import { EM_SQUARE, ASCENDER } from './constants.js';
  * @returns {number} advance width, clamped to emSquare
  */
 export function computeGlyphWidth(commands, emSquare = EM_SQUARE) {
-  let minX = Infinity, maxX = -Infinity;
+  let maxX = -Infinity;
   for (const cmd of commands) {
     if (cmd.x !== undefined) {
-      minX = Math.min(minX, cmd.x);
       maxX = Math.max(maxX, cmd.x);
     }
   }
-  const width = maxX > minX ? maxX - minX + emSquare * 0.15 : emSquare * 0.5;
+  // Advance width = rightmost ink edge + right side bearing
+  // Glyph is left-aligned with LSB = emSquare*0.05, so maxX already includes LSB
+  const width = maxX > -Infinity ? maxX + emSquare * 0.05 : emSquare * 0.5;
   return Math.min(width, emSquare);
 }
 

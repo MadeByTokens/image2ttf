@@ -111,9 +111,10 @@ export function svgPathToOpentypePath(svgPathData, sourceWidth, sourceHeight, em
   const refSize = cellHeight || Math.max(sourceWidth, sourceHeight);
   const scale = emSquare / refSize;
 
-  // Center horizontally
-  const scaledW = sourceWidth * scale;
-  const offsetX = Math.max(0, (emSquare - scaledW) / 2);
+  // Left-align with small side bearing (not centered — centering creates
+  // huge LSB for narrow glyphs like 'l', causing spacing issues)
+  const sideBearing = emSquare * 0.05;
+  const offsetX = sideBearing;
 
   // Baseline-relative vertical positioning.
   // baselineInCell: pixels from cell top to baseline (default: 75% of refSize).

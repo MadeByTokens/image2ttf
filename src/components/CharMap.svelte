@@ -220,51 +220,47 @@
         </button>
       </div>
 
-      <!-- Visual preview with adjustment guides -->
+      <!-- Visual preview with advance width boundaries -->
       {#if adjustingAdj}
         {@const bl = adjustingAdj.baseline}
         {@const bL = adjustingAdj.bearingLeft}
         {@const bR = adjustingAdj.bearingRight}
         {@const glyphData = appState.glyphPaths?.get(adjustingChar)}
         {@const hasTracedPath = glyphData?.commands?.length > 0}
-        {@const scale = 0.12}
-        {@const imgShiftY = -bl * scale}
-        {@const leftW = Math.max(0, bL * scale)}
-        {@const rightW = Math.max(0, bR * scale)}
         <div class="flex justify-center mb-4">
           <div class="relative bg-gray-50 dark:bg-gray-900 rounded-lg border dark:border-gray-700 overflow-hidden"
                style="width: 160px; height: 100px;">
-            <!-- Left bearing indicator -->
-            {#if bL !== 0}
-              <div class="absolute top-0 bottom-0 left-0 border-r-2 transition-all
-                          {bL > 0 ? 'bg-blue-200 dark:bg-blue-900/30 border-blue-400' : 'bg-red-200 dark:bg-red-900/30 border-red-400'}"
-                   style="width: {Math.abs(bL * scale)}px;"></div>
-            {/if}
-            <!-- Right bearing indicator -->
-            {#if bR !== 0}
-              <div class="absolute top-0 bottom-0 right-0 border-l-2 transition-all
-                          {bR > 0 ? 'bg-blue-200 dark:bg-blue-900/30 border-blue-400' : 'bg-red-200 dark:bg-red-900/30 border-red-400'}"
-                   style="width: {Math.abs(bR * scale)}px;"></div>
-            {/if}
             {#if hasTracedPath}
-              <!-- SVG glyph preview (accurate font coordinates) -->
+              <!-- SVG glyph preview with advance width box -->
               {@const adjResult = applyGlyphAdjustments(glyphData.commands, glyphData.width, adjustingAdj)}
               {@const svgD = commandsToSvgPath(adjResult.commands)}
+              {@const advW = adjResult.width}
               {@const baselineSvgY = ASCENDER - (EM_SQUARE * 0.10)}
               <svg viewBox="-50 -50 1100 1100" class="absolute inset-0 w-full h-full">
+                <!-- Advance width box background -->
+                <rect x="0" y="-50" width={advW} height="1100"
+                      fill="currentColor" class="text-teal-50 dark:text-teal-900/20" />
                 <!-- Baseline reference line -->
                 <line x1="-50" y1={baselineSvgY} x2="1150" y2={baselineSvgY}
                       stroke="currentColor" stroke-width="3" stroke-dasharray="12,8"
                       class="text-gray-300 dark:text-gray-600" />
+                <!-- Left boundary (x=0) -->
+                <line x1="0" y1="-50" x2="0" y2="1050"
+                      stroke="currentColor" stroke-width="4" class="text-teal-500" />
+                <!-- Right boundary (advance width) -->
+                <line x1={advW} y1="-50" x2={advW} y2="1050"
+                      stroke="currentColor" stroke-width="4" class="text-teal-500" />
+                <!-- Glyph path -->
                 <path d={svgD} fill="currentColor" class="text-gray-800 dark:text-gray-200" />
               </svg>
             {:else if adjustingThumb?.dataUrl}
               <!-- Fallback: thumbnail image (before tracing) -->
-              <!-- Baseline reference line (approximate) -->
+              {@const scale = 0.12}
+              {@const imgShiftY = -bl * scale}
               <div class="absolute left-0 right-0 border-t border-dashed border-gray-300 dark:border-gray-600"
                    style="top: 75%;"></div>
               <div class="absolute inset-0 flex items-center justify-center transition-transform"
-                   style="transform: translateY({imgShiftY}px); padding-left: {leftW}px; padding-right: {rightW}px;">
+                   style="transform: translateY({imgShiftY}px);">
                 <img src={adjustingThumb.dataUrl} alt={adjustingChar} class="max-w-full max-h-full object-contain" />
               </div>
               {#if bl !== 0}
@@ -305,8 +301,8 @@
           </span>
           <input
             type="range"
-            min="-100"
-            max="200"
+            min="-300"
+            max="300"
             step="5"
             value={adjustingAdj.bearingLeft}
             oninput={(e) => setAdj(adjustingChar, 'bearingLeft', e.target.value)}
@@ -325,8 +321,8 @@
           </span>
           <input
             type="range"
-            min="-100"
-            max="200"
+            min="-300"
+            max="300"
             step="5"
             value={adjustingAdj.bearingRight}
             oninput={(e) => setAdj(adjustingChar, 'bearingRight', e.target.value)}
