@@ -115,6 +115,13 @@ Allows AI agents to drive the pipeline via URL hash or `window.__image2ttf`.
 
 ### When `#api/` is in the URL, Wizard.svelte shows ApiMode.svelte instead of the normal wizard UI.
 
+### Discoverability
+Agents find the API via 4 layers (all always present, not just in API mode):
+1. **`window.__image2ttf_api`** — JS global with full self-documenting spec (endpoints, params, types, defaults, examples). Set in `src/main.js`.
+2. **HTML `<meta>` tags** — `<meta name="ai-api" content="window.__image2ttf_api">`, `<meta name="api-discovery" ...>`, and `<meta name="description" ...>` in `index.html`.
+3. **HTML comment** — `<!-- AI Agent API: ... -->` in `index.html` body tag.
+4. **Visible "API" badge** — in the footer of `App.svelte`, links to `#api/ready`, has tooltip with instructions.
+
 ## Key Gotchas
 
 - **imagetracerjs** outputs paths for ALL colors. Must filter by `fill="rgb(...)"` — only keep dark fills.
