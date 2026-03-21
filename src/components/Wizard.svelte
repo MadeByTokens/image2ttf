@@ -1,6 +1,7 @@
 <script>
   import { appState, setStep, applyTheme } from '../lib/store.svelte.js';
   import { t } from '../lib/i18n.svelte.js';
+  import { isApiMode } from '../lib/api.js';
   import { onMount } from 'svelte';
   import { fly, fade } from 'svelte/transition';
   import ProgressBar from './ProgressBar.svelte';
@@ -13,11 +14,13 @@
   import Preview from './Preview.svelte';
   import Generate from './Generate.svelte';
   import HelpDialog from './HelpDialog.svelte';
+  import ApiMode from './ApiMode.svelte';
 
   const stepKeys = ['upload', 'detect', 'characters', 'preview', 'generate'];
   const steps = $derived(stepKeys.map(k => t(`steps.${k}`)));
 
   let helpOpen = $state(false);
+  let apiMode = $state(isApiMode());
 
   onMount(() => {
     applyTheme(appState.theme);
@@ -47,6 +50,9 @@
   }
 </script>
 
+{#if apiMode}
+  <ApiMode />
+{:else}
 <div class="min-h-screen flex flex-col">
   <ThemeToggle />
   <LanguagePicker />
@@ -152,3 +158,4 @@
     </div>
   </nav>
 </div>
+{/if}

@@ -41,6 +41,8 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 - `src/lib/i18n/fr.js` — French translations
 - `src/components/LanguagePicker.svelte` — language dropdown (fixed top-right, next to theme toggle)
 - `src/components/LanguagePrompt.svelte` — banner asking user to switch if browser language differs
+- `src/lib/api.js` — hash-based Agent API: `parseApiHash()`, `isApiMode()`, `runPipeline(opts)`, `abortPipeline()`, `autoRunFromHash()`, exposes `window.__image2ttf`
+- `src/components/ApiMode.svelte` — minimal headless UI for API mode (status, progress, download)
 
 ## Commands
 
@@ -83,6 +85,35 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
 - For arrays (help content), translations export nested arrays accessed via `resolveArray()` in HelpDialog.
 - Locale is persisted in `localStorage('locale')`. Browser language detection runs on first visit via `LanguagePrompt.svelte`.
 - The `t()` function falls back to English if a key is missing in the current locale.
+
+## Agent API (hash-based)
+
+Allows AI agents to drive the pipeline via URL hash or `window.__image2ttf`.
+
+### URL formats
+- `#api/generate?imageUrl=<url>&fontName=X&detail=5&smoothing=2&spaceWidth=60` — full pipeline from image URL
+- `#api/generate?imageData=<base64>&fontName=X` — full pipeline from inline base64
+- `#api/ready` — enter API mode, wait for `window.__image2ttf.run({...})` call
+- `charset` param uses `|` separator for rows: `charset=abcdefghijklm|nopqrstuvwxyz|...`
+- `autoDownload=true` triggers browser file download on completion
+
+### `window.__image2ttf` contract
+- `.status` — `'idle'|'loading'|'detecting'|'tracing'|'building'|'done'|'error'`
+- `.progress`, `.total` — numeric progress
+- `.message` — human-readable status
+- `.fontBlobUrl` — blob URL to fetch the .ttf (when done)
+- `.fontArrayBuffer` — raw bytes (when done)
+- `.glyphCount`, `.fontName`
+- `.run(opts)` — start pipeline: `{ image, fontName, detail, smoothing, spaceWidth, charset, autoDownload }`
+- `.abort()` — cancel in-progress work
+
+### Status channels (4 parallel)
+1. `document.title` — `"api:tracing 12/88"`
+2. DOM `#api-status` element — same text
+3. `window.__image2ttf` object
+4. `console.log('__API__:...')`
+
+### When `#api/` is in the URL, Wizard.svelte shows ApiMode.svelte instead of the normal wizard UI.
 
 ## Key Gotchas
 
