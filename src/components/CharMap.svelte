@@ -5,6 +5,7 @@
   import { commandsToSvgPath } from '../lib/glyph-utils.js';
   import { applyGlyphAdjustments } from '../lib/font-builder.js';
   import { ASCENDER, EM_SQUARE } from '../lib/constants.js';
+  import { t } from '../lib/i18n.svelte.js';
 
   const logger = createLogger('CharMap');
 
@@ -103,9 +104,9 @@
 </script>
 
 <div class="flex flex-col items-center gap-4">
-  <h2 class="text-2xl font-bold">Character Map</h2>
+  <h2 class="text-2xl font-bold">{t('charmap.title')}</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
-    Verify each detected character is labeled correctly. Click a thumbnail to adjust glyph metrics.
+    {t('charmap.subtitle')}
   </p>
 
   {#if computing}
@@ -115,7 +116,7 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
         </svg>
-        Generating thumbnails...
+        {t('charmap.generatingThumbs')}
         {#if progress.total > 0}
           <span class="text-xs">{progress.current}/{progress.total}</span>
         {/if}
@@ -130,7 +131,7 @@
         onclick={() => { abortCompute(); computing = false; }}
         class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
                text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-      >Cancel</button>
+      >{t('common.cancel')}</button>
     </div>
   {/if}
 
@@ -143,12 +144,12 @@
           onclick={() => openAdjustDialog(thumb.char)}
           class="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-800 rounded overflow-hidden
                  cursor-pointer hover:ring-2 hover:ring-teal-400 transition-all relative"
-          aria-label="Adjust metrics for {thumb.char}"
+          aria-label={t('charmap.adjustAria', { char: thumb.char })}
         >
           {#if thumb.dataUrl}
             <img src={thumb.dataUrl} alt={thumb.char} class="max-w-full max-h-full object-contain" />
           {:else}
-            <span class="text-gray-300 text-xs">empty</span>
+            <span class="text-gray-300 text-xs">{t('charmap.empty')}</span>
           {/if}
           {#if hasAdj(thumb.char)}
             <span class="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>
@@ -162,7 +163,7 @@
                  dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
                  focus:ring-1 focus:ring-teal-500 focus:outline-none"
           oninput={(e) => updateChar(thumb.index, e.target.value)}
-          aria-label="Character label for cell {thumb.index + 1}"
+          aria-label={t('charmap.labelAria', { index: thumb.index + 1 })}
         />
       </div>
     {/each}
@@ -171,7 +172,7 @@
   <!-- Space width control -->
   <div class="w-full max-w-sm flex flex-col items-center gap-1 mt-2">
     <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
-      Space width:
+      {t('charmap.spaceWidth')}
       <input
         type="range"
         min="20"
@@ -182,13 +183,13 @@
       <span class="text-xs text-gray-400 w-10 text-center">{appState.spaceWidthPercent}%</span>
     </label>
     <p class="text-xs text-gray-400 dark:text-gray-500">
-      Percentage of average lowercase letter width
+      {t('charmap.spaceWidthHelp')}
     </p>
   </div>
 
   {#if thumbnails.length === 0 && !computing}
     <p class="text-amber-600 dark:text-amber-400 text-sm">
-      No cells detected. Go back and check the grid.
+      {t('charmap.noCells')}
     </p>
   {/if}
 </div>
@@ -202,17 +203,17 @@
     role="dialog"
     tabindex="-1"
     aria-modal="true"
-    aria-label="Adjust glyph metrics for {adjustingChar}"
+    aria-label={t('charmap.adjustAria', { char: adjustingChar })}
   >
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-bold">
-          Adjust "<span class="font-mono">{adjustingChar}</span>"
+          {t('charmap.adjustTitle', { char: adjustingChar })}
         </h3>
         <button
           onclick={() => { adjustingChar = null; }}
           class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -276,7 +277,7 @@
       <div class="flex flex-col gap-4">
         <label class="block">
           <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
-            <span>Baseline offset</span>
+            <span>{t('charmap.baselineOffset')}</span>
             <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.baseline}</span>
           </span>
           <input
@@ -289,14 +290,14 @@
             class="w-full"
           />
           <span class="flex justify-between text-xs text-gray-400 mt-0.5">
-            <span>Down</span>
-            <span>Up</span>
+            <span>{t('charmap.down')}</span>
+            <span>{t('charmap.up')}</span>
           </span>
         </label>
 
         <label class="block">
           <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
-            <span>Left bearing</span>
+            <span>{t('charmap.leftBearing')}</span>
             <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.bearingLeft}</span>
           </span>
           <input
@@ -309,14 +310,14 @@
             class="w-full"
           />
           <span class="flex justify-between text-xs text-gray-400 mt-0.5">
-            <span>Tighter</span>
-            <span>Wider</span>
+            <span>{t('charmap.tighter')}</span>
+            <span>{t('charmap.wider')}</span>
           </span>
         </label>
 
         <label class="block">
           <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center justify-between mb-1">
-            <span>Right bearing</span>
+            <span>{t('charmap.rightBearing')}</span>
             <span class="text-xs font-mono text-gray-400 w-12 text-right">{adjustingAdj.bearingRight}</span>
           </span>
           <input
@@ -329,8 +330,8 @@
             class="w-full"
           />
           <span class="flex justify-between text-xs text-gray-400 mt-0.5">
-            <span>Tighter</span>
-            <span>Wider</span>
+            <span>{t('charmap.tighter')}</span>
+            <span>{t('charmap.wider')}</span>
           </span>
         </label>
       </div>
@@ -341,16 +342,16 @@
           onclick={() => resetAdj(adjustingChar)}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Reset</button>
+        >{t('common.reset')}</button>
         <button
           onclick={() => { adjustingChar = null; }}
           class="px-4 py-1.5 text-sm rounded-lg bg-teal-600 text-white
                  hover:bg-teal-700 transition-colors"
-        >Done</button>
+        >{t('common.done')}</button>
       </div>
 
       <p class="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
-        Values in font units. Cleared on re-detect or reset.
+        {t('charmap.adjustHint')}
       </p>
     </div>
   </div>

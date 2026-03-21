@@ -2,6 +2,7 @@
   import { appState, setError } from '../lib/store.svelte.js';
   import { DEFAULT_CHAR_LAYOUT } from '../lib/constants.js';
   import { ImageLoadError } from '../lib/errors.js';
+  import { t } from '../lib/i18n.svelte.js';
 
   let dragOver = $state(false);
   let fileInput;
@@ -28,7 +29,7 @@
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setError(new ImageLoadError('Please upload an image file (PNG, JPG, etc.)').message);
+      setError(t('upload.errorNotImage'));
       return;
     }
 
@@ -47,7 +48,7 @@
       zoom = 1;
     };
     img.onerror = () => {
-      setError('Failed to load image. Please try another file.');
+      setError(t('upload.errorLoadFailed'));
     };
     img.src = currentObjectUrl;
   }
@@ -163,7 +164,7 @@
       const file = new File([blob], 'font_test.png', { type: 'image/png' });
       handleFile(file);
     } catch (err) {
-      setError('Could not load example image: ' + err.message);
+      setError(t('upload.errorExample', { error: err.message }));
     }
   }
 
@@ -190,10 +191,9 @@
 </script>
 
 <div class="flex flex-col items-center gap-6">
-  <h2 class="text-2xl font-bold">Upload Your Handwriting</h2>
+  <h2 class="text-2xl font-bold">{t('upload.title')}</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
-    Upload an image of your handwritten characters arranged in a grid
-    (rows of a-z, A-Z, 0-9, and punctuation), or try the example below first.
+    {t('upload.description')}
   </p>
 
   <button
@@ -202,7 +202,7 @@
            text-teal-600 dark:text-teal-400
            hover:bg-teal-50 dark:hover:bg-teal-900/30 transition-colors"
   >
-    Try with example image
+    {t('upload.tryExample')}
   </button>
 
   {#if !appState.uploadedImage}
@@ -225,9 +225,9 @@
           d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        <span class="font-semibold text-teal-600 dark:text-teal-400">Click to upload</span> or drag and drop
+        <span class="font-semibold text-teal-600 dark:text-teal-400">{t('upload.clickToUpload')}</span> {t('upload.orDragDrop')}
       </p>
-      <p class="text-xs text-gray-400">PNG, JPG, or WebP</p>
+      <p class="text-xs text-gray-400">{t('upload.formats')}</p>
     </div>
   {:else}
     <!-- Image viewer with mode-based interaction -->
@@ -239,39 +239,39 @@
             onclick={() => { mode = 'pan'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'pan'
               ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-          >Pan</button>
+          >{t('upload.pan')}</button>
           <button
             onclick={() => { mode = 'rotate'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'rotate'
               ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-          >Rotate</button>
+          >{t('upload.rotate')}</button>
           <button
             onclick={() => { mode = 'zoom'; }}
             class="px-3 py-1.5 text-sm transition-colors {mode === 'zoom'
               ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-          >Zoom</button>
+          >{t('upload.zoom')}</button>
         </div>
         <button
           onclick={resetView}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Reset</button>
+        >{t('common.reset')}</button>
         <button
           onclick={() => fileInput.click()}
           class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >Change Image</button>
+        >{t('upload.changeImage')}</button>
       </div>
 
       <p class="text-xs text-gray-400 dark:text-gray-500">
         {#if mode === 'pan'}
-          Drag to move the image. Scroll to zoom.
+          {t('upload.panHelp')}
         {:else if mode === 'rotate'}
-          Drag left/right to rotate. Scroll to zoom.
+          {t('upload.rotateHelp')}
         {:else}
-          Drag up/down to zoom. Scroll also works.
+          {t('upload.zoomHelp')}
         {/if}
-        {rotation !== 0 ? ` Rotated ${Math.round(rotation)}°.` : ''}
+        {rotation !== 0 ? ` ${t('upload.rotated', { angle: Math.round(rotation) })}` : ''}
       </p>
 
       <!-- Viewer -->
@@ -289,14 +289,14 @@
       >
         <img
           src={appState.uploadedImage.src}
-          alt="Uploaded handwriting"
+          alt={t('upload.altText')}
           class="block mx-auto max-w-none pointer-events-none"
           style="transform: translate({panX}px, {panY}px) scale({zoom}) rotate({rotation}deg); transform-origin: center center;"
         />
       </div>
 
       <p class="text-sm text-green-600 dark:text-green-400">
-        Image loaded ({appState.imageCanvas?.width || 0} &times; {appState.imageCanvas?.height || 0}px)
+        {t('upload.imageLoaded', { width: appState.imageCanvas?.width || 0, height: appState.imageCanvas?.height || 0 })}
       </p>
 
       <!-- Character layout input -->
@@ -308,14 +308,13 @@
           <svg class="w-4 h-4 transition-transform {layoutCollapsed ? '' : 'rotate-90'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
-          Character layout ({layoutCharCount} chars, {layoutText.split('\n').filter(l => l.length > 0).length} rows)
+          {t('upload.layoutHeader', { count: layoutCharCount, rows: layoutText.split('\n').filter(l => l.length > 0).length })}
         </button>
 
         {#if !layoutCollapsed}
           <div class="mt-2 flex flex-col gap-1.5">
             <p class="text-xs text-gray-400 dark:text-gray-500">
-              Type the characters as they appear in your image, one row per line.
-              This helps grid detection and sets the correct labels.
+              {t('upload.layoutHelp')}
             </p>
             <textarea
               value={layoutText}
@@ -327,7 +326,7 @@
                      bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200
                      focus:ring-2 focus:ring-teal-500 focus:border-teal-500 focus:outline-none
                      resize-y"
-              aria-label="Character layout — one row per line"
+              aria-label={t('upload.layoutAria')}
             ></textarea>
           </div>
         {/if}

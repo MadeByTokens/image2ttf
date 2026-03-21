@@ -2,6 +2,7 @@
   import { appState, setError, resyncCharMap, getCharset } from '../lib/store.svelte.js';
   import { detectGridAsync, redetectColumnsAsync, abortCompute } from '../lib/compute.js';
   import { DARK_PIXEL_THRESHOLD, ROW_DENSITY_THRESHOLD, COL_DENSITY_THRESHOLD, MIN_ROW_HEIGHT, MIN_COL_WIDTH, MIN_GAP_FRACTION } from '../lib/constants.js';
+  import { t } from '../lib/i18n.svelte.js';
   import { onMount, untrack } from 'svelte';
   import ContextMenu from './grid/ContextMenu.svelte';
   import AdvancedPanel from './grid/AdvancedPanel.svelte';
@@ -47,7 +48,7 @@
       });
 
       if (grid.cells.length === 0) {
-        setError('Could not detect character rows. Try adjusting the image or parameters.');
+        setError(t('detect.errorNoRows'));
         return;
       }
 
@@ -63,7 +64,7 @@
       drawOverlay();
     } catch (err) {
       if (err.message === 'Aborted') return;
-      setError('Grid detection failed: ' + err.message + '. Try adjusting Dark pixel threshold in Advanced settings, or use Uniform Grid.');
+      setError(t('detect.errorDetection', { error: err.message }));
     } finally {
       computing = false;
     }
@@ -96,7 +97,7 @@
       drawOverlay();
     } catch (err) {
       if (err.message === 'Aborted') return;
-      setError('Column detection failed: ' + err.message);
+      setError(t('detect.errorColumns', { error: err.message }));
     } finally {
       computing = false;
     }
@@ -112,17 +113,17 @@
 
   function applyUniformGrid() {
     if (!appState.imageCanvas) return;
-    const input = prompt('Enter rows x cols (e.g. "5x22"):', '5x22');
+    const input = prompt(t('detect.uniformPrompt'), '5x22');
     if (!input) return;
     const match = input.match(/^(\d+)\s*[x×,]\s*(\d+)$/i);
     if (!match) {
-      setError('Invalid format. Use "rows x cols" like "5x22".');
+      setError(t('detect.errorUniformFormat'));
       return;
     }
     const numRows = parseInt(match[1]);
     const numCols = parseInt(match[2]);
     if (numRows < 1 || numCols < 1 || numRows > 50 || numCols > 100) {
-      setError('Rows must be 1-50, cols must be 1-100.');
+      setError(t('detect.errorUniformRange'));
       return;
     }
 
@@ -799,7 +800,7 @@
     const flatIdx = getFlatIndex(rowIdx, colIdx);
     const currentChar = appState.charMap[flatIdx] || '?';
     const input = prompt(
-      `Relabel from this cell onward.\nEnter the character this cell should be (current: "${currentChar}"):`,
+      t('detect.relabelPrompt', { current: currentChar }),
       currentChar
     );
     if (input && input.length === 1) {
@@ -813,7 +814,7 @@
     const { rowIdx, colIdx } = contextMenu;
     const flatIdx = getFlatIndex(rowIdx, colIdx);
     const currentChar = appState.charMap[flatIdx] || '?';
-    const input = prompt(`Change label for this cell (current: "${currentChar}"):`, currentChar);
+    const input = prompt(t('detect.changeLabelPrompt', { current: currentChar }), currentChar);
     if (input && input.length === 1) {
       updateCellLabel(rowIdx, colIdx, input);
     }
@@ -834,9 +835,9 @@
 <svelte:window onmouseup={handleCanvasMouseUp} onclick={handleWindowClick} />
 
 <div class="flex flex-col items-center gap-4">
-  <h2 class="text-2xl font-bold">Detect</h2>
+  <h2 class="text-2xl font-bold">{t('detect.title')}</h2>
   <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">
-    The grid was auto-detected. Verify that each character is in its own box.
+    {t('detect.subtitle')}
   </p>
 
   <!-- Toolbar -->
@@ -845,36 +846,36 @@
       onclick={applyUniformGrid}
       class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-    >Uniform Grid</button>
+    >{t('detect.uniformGrid')}</button>
     <button
       onclick={redetectLabels}
       class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      title="Keep current boxes, re-assign labels from charset"
-    >Re-label</button>
+      title={t('detect.reLabelTitle')}
+    >{t('detect.reLabel')}</button>
     <button
       onclick={redetectColumns}
       class="px-3 py-1.5 text-sm rounded-lg border border-teal-300 dark:border-teal-600
              text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
-      title="Keep row boundaries, re-detect columns within each row"
-    >Re-detect</button>
+      title={t('detect.reDetectTitle')}
+    >{t('detect.reDetect')}</button>
     <button
       onclick={resetDetection}
       class="px-3 py-1.5 text-sm rounded-lg border border-red-300 dark:border-red-600
              text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-      title="Re-run full auto-detection from scratch, replacing all rows and cells"
-    >Reset</button>
+      title={t('detect.resetTitle')}
+    >{t('common.reset')}</button>
     <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
       <button
         onclick={() => { mode = 'auto'; selectedCell = null; contextMenu = null; drawOverlay(); }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'auto'
           ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-      >Auto</button>
+      >{t('detect.auto')}</button>
       <button
         onclick={() => { mode = 'edit'; }}
         class="px-3 py-1.5 text-sm transition-colors {mode === 'edit'
           ? 'bg-teal-500 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}"
-      >Edit</button>
+      >{t('detect.edit')}</button>
     </div>
     <button
       onclick={() => { showAdvanced = !showAdvanced; }}
@@ -882,7 +883,7 @@
              {showAdvanced
                ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
-    >Advanced</button>
+    >{t('detect.advancedBtn')}</button>
   </div>
 
   <!-- Advanced parameters panel -->
@@ -900,11 +901,11 @@
 
   {#if appState.grid}
     <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-      <span>Detected {totalRows} rows, {totalCells} cells</span>
+      <span>{t('detect.status', { rows: totalRows, cells: totalCells })}</span>
       {#if mode === 'edit' && selectedInfo}
         {@const info = selectedInfo}
         <span class="text-teal-500 font-medium inline-flex items-center gap-1">
-          Selected:
+          {t('detect.selected')}
           <input
             type="text"
             value={info.char}
@@ -917,7 +918,7 @@
                 updateCellLabel(selectedCell.rowIdx, selectedCell.colIdx, e.target.value);
               }
             }}
-            aria-label="Edit label for selected cell"
+            aria-label={t('detect.editLabelAria')}
           />
           ({info.w}&times;{info.h}px)
         </span>
@@ -927,7 +928,7 @@
 
   {#if mode === 'edit'}
     <p class="text-xs text-gray-400 dark:text-gray-500 max-w-md text-center">
-      Drag the solid baseline to set where characters sit. Drag dashed lines to adjust row bounds. Drag cell edges to resize individually. Double-click to add cell. Right-click for more.
+      {t('detect.editHint')}
     </p>
   {/if}
 
@@ -937,21 +938,21 @@
       onclick={() => { zoomLevel = Math.max(0.5, zoomLevel / 1.25); }}
       class="px-2 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      aria-label="Zoom out"
+      aria-label={t('detect.zoomOutAria')}
     >-</button>
     <span class="text-xs text-gray-500 dark:text-gray-400 w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
     <button
       onclick={() => { zoomLevel = Math.min(5, zoomLevel * 1.25); }}
       class="px-2 py-0.5 text-sm rounded border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      aria-label="Zoom in"
+      aria-label={t('detect.zoomInAria')}
     >+</button>
     {#if zoomLevel !== 1}
       <button
         onclick={() => { zoomLevel = 1; }}
         class="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600
                hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      >Reset</button>
+      >{t('common.reset')}</button>
     {/if}
   </div>
 
@@ -965,13 +966,13 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
-            Detecting...
+            {t('detect.detecting')}
           </div>
           <button
             onclick={() => { abortCompute(); computing = false; }}
             class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
                    text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          >Cancel</button>
+          >{t('common.cancel')}</button>
         </div>
       </div>
     {/if}
@@ -987,7 +988,7 @@
 
   {#if !appState.grid}
     <p class="text-amber-600 dark:text-amber-400 text-sm">
-      Detecting character grid...
+      {t('detect.detectingGrid')}
     </p>
   {/if}
 </div>

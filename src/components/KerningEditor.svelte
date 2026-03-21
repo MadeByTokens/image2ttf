@@ -1,5 +1,6 @@
 <script>
   import { appState } from '../lib/store.svelte.js';
+  import { t } from '../lib/i18n.svelte.js';
 
   let { onrebuild } = $props();
 
@@ -60,19 +61,19 @@
 
 <div class="w-full max-w-lg border rounded-lg p-4 bg-white dark:bg-gray-800 dark:border-gray-700">
   <div class="flex items-center justify-between mb-3">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Kerning Pairs</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('kerningEditor.title')}</h3>
     <div class="flex gap-2">
       <button
         onclick={addCommonPairs}
         class="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600
                hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-      >Add common pairs</button>
+      >{t('kerningEditor.addCommon')}</button>
       {#if kernPairList.length > 0}
         <button
           onclick={clearAllKerning}
           class="px-2 py-1 text-xs rounded border border-red-300 dark:border-red-600
                  text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-        >Clear all</button>
+        >{t('kerningEditor.clearAll')}</button>
       {/if}
     </div>
   </div>
@@ -103,8 +104,8 @@
       class="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600
              hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
              disabled:opacity-40 disabled:cursor-not-allowed"
-    >Add pair</button>
-    <span class="text-xs text-gray-400 ml-auto">Values in font units</span>
+    >{t('kerningEditor.addPair')}</button>
+    <span class="text-xs text-gray-400 ml-auto">{t('kerningEditor.valuesInFontUnits')}</span>
   </div>
 
   <!-- Pair list -->
@@ -133,14 +134,14 @@
           <button
             onclick={() => removeKernPair(pair)}
             class="text-red-400 hover:text-red-600 text-xs px-1"
-            aria-label="Remove pair {pair}"
+            aria-label={t('kerningEditor.removePairAria', { pair })}
           >x</button>
         </div>
       {/each}
     </div>
   {:else}
     <p class="text-xs text-gray-400 dark:text-gray-500 text-center py-2">
-      No kerning pairs defined. Click "Add common pairs" to get started.
+      {t('kerningEditor.noPairs')}
     </p>
   {/if}
 </div>

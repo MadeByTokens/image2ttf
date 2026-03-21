@@ -34,6 +34,13 @@ Convert handwritten character grids into TTF font files, entirely client-side.
 - `src/components/KerningEditor.svelte` — kerning pair editor (extracted from Preview)
 - `src/components/grid/ContextMenu.svelte` — right-click context menu (extracted from GridOverlay)
 - `src/components/grid/AdvancedPanel.svelte` — advanced detection parameters (extracted from GridOverlay)
+- `src/lib/i18n.svelte.js` — i18n module: reactive `i18n` state, `t(key, params)` translation function with interpolation, `setLocale()`, `detectBrowserLocale()`, `LOCALES` array
+- `src/lib/i18n/en.js` — English translations (source of truth for all keys)
+- `src/lib/i18n/pt-BR.js` — Portuguese (Brazil) translations
+- `src/lib/i18n/es.js` — Spanish (international) translations
+- `src/lib/i18n/fr.js` — French translations
+- `src/components/LanguagePicker.svelte` — language dropdown (fixed top-right, next to theme toggle)
+- `src/components/LanguagePrompt.svelte` — banner asking user to switch if browser language differs
 
 ## Commands
 
@@ -66,6 +73,16 @@ npm run deploy         # Run tests + build + publish to GitHub Pages via gh-page
   - Bbox-normalized IoU: avg ~0.68, thresholds: per-glyph ≥0.20, avg ≥0.30
 - `tests/validate-font.js` — standalone manual TTF validator
 - Coverage: `npm run test:coverage` generates text + HTML report for `src/lib/`
+
+## Internationalization (i18n)
+
+- All user-facing strings use `t('key.path')` from `src/lib/i18n.svelte.js`.
+- Translations are in `src/lib/i18n/{locale}.js`. English (`en.js`) is the source of truth.
+- Supported locales: `en`, `pt-BR`, `es`, `fr`. Add new ones by creating a file in `src/lib/i18n/` and adding it to the `LOCALES` array in `i18n.svelte.js`.
+- Interpolation: `t('key', { var: value })` replaces `{var}` in the string.
+- For arrays (help content), translations export nested arrays accessed via `resolveArray()` in HelpDialog.
+- Locale is persisted in `localStorage('locale')`. Browser language detection runs on first visit via `LanguagePrompt.svelte`.
+- The `t()` function falls back to English if a key is missing in the current locale.
 
 ## Key Gotchas
 

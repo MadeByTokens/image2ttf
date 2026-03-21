@@ -1,9 +1,12 @@
 <script>
   import { appState, setStep, applyTheme } from '../lib/store.svelte.js';
+  import { t } from '../lib/i18n.svelte.js';
   import { onMount } from 'svelte';
   import { fly, fade } from 'svelte/transition';
   import ProgressBar from './ProgressBar.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
+  import LanguagePicker from './LanguagePicker.svelte';
+  import LanguagePrompt from './LanguagePrompt.svelte';
   import Upload from './Upload.svelte';
   import GridOverlay from './GridOverlay.svelte';
   import CharMap from './CharMap.svelte';
@@ -11,7 +14,8 @@
   import Generate from './Generate.svelte';
   import HelpDialog from './HelpDialog.svelte';
 
-  const steps = ['Upload', 'Detect', 'Characters', 'Preview', 'Generate'];
+  const stepKeys = ['upload', 'detect', 'characters', 'preview', 'generate'];
+  const steps = $derived(stepKeys.map(k => t(`steps.${k}`)));
 
   let helpOpen = $state(false);
 
@@ -45,6 +49,10 @@
 
 <div class="min-h-screen flex flex-col">
   <ThemeToggle />
+  <LanguagePicker />
+
+  <!-- Language prompt banner -->
+  <LanguagePrompt />
 
   <!-- Header -->
   <header class="pt-6 pb-2 text-center">
@@ -52,7 +60,7 @@
       image2ttf
     </h1>
     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-      Create fonts from character grid images — handwriting, calligraphy, or custom designs
+      {t('header.subtitle')}
     </p>
   </header>
 
@@ -63,8 +71,8 @@
            bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400
            hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400
            shadow-sm hover:shadow transition-all flex items-center justify-center"
-    aria-label="Help for current step"
-    title="Help"
+    aria-label={t('help.aria')}
+    title={t('help.tooltip')}
   >
     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01" />
@@ -120,11 +128,11 @@
                disabled:opacity-30 disabled:cursor-not-allowed
                transition-colors"
       >
-        Back
+        {t('common.back')}
       </button>
 
       <span class="text-xs text-gray-400">
-        Step {appState.currentStep + 1} of {steps.length}
+        {t('common.stepOf', { current: appState.currentStep + 1, total: steps.length })}
       </span>
 
       {#if appState.currentStep < steps.length - 1}
@@ -136,7 +144,7 @@
                  disabled:opacity-50 disabled:cursor-not-allowed
                  transition-all"
         >
-          Next
+          {t('common.next')}
         </button>
       {:else}
         <div class="w-16"></div>

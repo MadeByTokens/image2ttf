@@ -1,6 +1,7 @@
 <script>
   import { applyGlyphAdjustments } from '../lib/font-builder.js';
   import { commandsToSvgPath } from '../lib/glyph-utils.js';
+  import { t } from '../lib/i18n.svelte.js';
 
   let { glyphEntries = [], selectedGlyph = $bindable(null), onretrace, ondelete, glyphAdjustments = {} } = $props();
 
@@ -19,7 +20,7 @@
 
 <div class="w-full max-w-4xl">
   <p class="text-xs text-gray-400 dark:text-gray-500 mb-2 text-center">
-    Click a glyph to inspect. Use buttons to delete or retrace individual characters.
+    {t('glyphGallery.hint')}
   </p>
   <div class="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-13 gap-1.5">
     {#each displayEntries as entry (entry.char)}
@@ -48,19 +49,19 @@
         <div class="flex-1 min-w-0">
           <p class="font-mono text-lg mb-1">"{entry.char}" <span class="text-sm text-gray-400">U+{entry.char.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}</span></p>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            Width: {Math.round(entry.width)} · {entry.commands.length} path commands
+            {t('glyphGallery.width', { width: Math.round(entry.width) })} · {t('glyphGallery.pathCommands', { count: entry.commands.length })}
           </p>
           <div class="flex gap-2 mt-3">
             <button
               onclick={() => onretrace?.(entry.char)}
               class="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600
                      hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >Retrace</button>
+            >{t('glyphGallery.retrace')}</button>
             <button
               onclick={() => ondelete?.(entry.char)}
               class="px-3 py-1.5 text-sm rounded-lg border border-red-300 dark:border-red-600
                      text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >Delete</button>
+            >{t('common.delete')}</button>
           </div>
         </div>
       </div>

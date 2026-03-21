@@ -1,13 +1,14 @@
 <script>
   import { appState, setError } from '../lib/store.svelte.js';
   import { createFont, downloadFont } from '../lib/font-builder.js';
+  import { t } from '../lib/i18n.svelte.js';
 
   let generating = $state(false);
   let generated = $state(false);
 
   function generate() {
     if (!appState.glyphPaths || appState.glyphPaths.size === 0) {
-      setError('No traced glyphs available. Go back to the Preview step.');
+      setError(t('generate.errorNoGlyphs'));
       return;
     }
 
@@ -21,7 +22,7 @@
       appState.generatedFont = font;
       generated = true;
     } catch (err) {
-      setError('Font generation failed: ' + err.message + '. Try going back to Preview and removing problematic glyphs.');
+      setError(t('generate.errorBuild', { error: err.message }));
     } finally {
       generating = false;
     }
@@ -38,11 +39,11 @@
 </script>
 
 <div class="flex flex-col items-center gap-6">
-  <h2 class="text-2xl font-bold">Generate Font</h2>
+  <h2 class="text-2xl font-bold">{t('generate.title')}</h2>
 
   <div class="w-full max-w-md">
     <label for="font-name" class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-      Font Name
+      {t('generate.fontName')}
     </label>
     <input
       id="font-name"
@@ -55,7 +56,7 @@
   </div>
 
   <div class="text-sm text-gray-500 dark:text-gray-400">
-    {glyphCount} glyphs ready to include
+    {t('generate.glyphCount', { count: glyphCount })}
   </div>
 
   {#if !generated}
@@ -71,9 +72,9 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
         </svg>
-        Generating...
+        {t('generate.generating')}
       {:else}
-        Generate TTF Font
+        {t('generate.generateBtn')}
       {/if}
     </button>
   {:else}
@@ -82,7 +83,7 @@
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
         </svg>
-        <span class="font-medium">Font generated successfully!</span>
+        <span class="font-medium">{t('generate.success')}</span>
       </div>
 
       <button
@@ -94,14 +95,14 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
-        Download {appState.fontName || 'handwriting'}.ttf
+        {t('generate.download', { name: appState.fontName || 'handwriting' })}
       </button>
 
       <button
         onclick={() => { generated = false; }}
         class="text-sm text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400"
       >
-        Regenerate with different settings
+        {t('generate.regenerate')}
       </button>
     </div>
   {/if}

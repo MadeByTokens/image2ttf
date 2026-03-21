@@ -1,4 +1,5 @@
 <script>
+  import { t } from '../../lib/i18n.svelte.js';
   let {
     contextMenu = $bindable(null),
     onchangelabel,
@@ -24,42 +25,42 @@
   >
     {#if contextMenu.type === 'cell'}
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onchangelabel?.()}>
-        Change label
+        {t('contextMenu.changeLabel')}
       </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onrelabel?.()}>
-        Relabel from here...
+        {t('contextMenu.relabelFrom')}
       </button>
       <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onsplitcell?.()}>
-        Split cell
+        {t('contextMenu.splitCell')}
       </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => ondeletecell?.()}>
-        Delete cell
+        {t('contextMenu.deleteCell')}
       </button>
     {:else if contextMenu.type === 'empty'}
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onaddcell?.()}>
-        Add cell here
+        {t('contextMenu.addCellHere')}
       </button>
       <hr class="border-gray-200 dark:border-gray-600 my-0.5" />
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; onaddrowatseparator?.(); }}>
-        Add row above
+        {t('contextMenu.addRowAbove')}
       </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onaddrowbelow?.()}>
-        Add row below
+        {t('contextMenu.addRowBelow')}
       </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => { contextMenu = { ...contextMenu, type: 'rowSep', boundary: 'top' }; ondeleterow?.(); }}>
-        Delete this row
+        {t('contextMenu.deleteThisRow')}
       </button>
     {:else if contextMenu.type === 'rowSep'}
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onaddrowatseparator?.()}>
-        Add row here
+        {t('contextMenu.addRowHere')}
       </button>
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" onclick={() => ondeleterow?.()}>
-        Delete row
+        {t('contextMenu.deleteRow')}
       </button>
     {:else if contextMenu.type === 'noRow'}
       <button class="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => onaddrowatposition?.()}>
-        Add row here
+        {t('contextMenu.addRowHere')}
       </button>
     {/if}
   </div>

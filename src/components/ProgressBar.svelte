@@ -1,8 +1,9 @@
 <script>
+  import { t } from '../lib/i18n.svelte.js';
   const { currentStep = 0, steps = [] } = $props();
 </script>
 
-<nav aria-label="Progress" class="mb-8">
+<nav aria-label={t('progress.aria')} class="mb-8">
   <ol class="flex items-center justify-center gap-2 sm:gap-4">
     {#each steps as stepLabel, i}
       <li class="flex items-center gap-1 sm:gap-2">

@@ -5,6 +5,7 @@
   import { traceCell } from '../lib/glyph-utils.js';
   import { runTracingAsync, abortCompute } from '../lib/compute.js';
   import { createLogger } from '../lib/logger.js';
+  import { t } from '../lib/i18n.svelte.js';
   import { onMount, untrack } from 'svelte';
   import GlyphGallery from './GlyphGallery.svelte';
   import KerningEditor from './KerningEditor.svelte';
@@ -24,7 +25,7 @@
 
   async function startTracing() {
     if (!appState.grid || !appState.imageCanvas || appState.charMap.length === 0) {
-      setError('Missing grid or character map data.');
+      setError(t('preview.errorMissing'));
       return;
     }
 
@@ -54,7 +55,7 @@
       buildPreviewFont();
     } catch (err) {
       if (err.message === 'Aborted') return;
-      setError('Tracing failed: ' + err.message + '. Try reducing Smoothness or going back to check the grid.');
+      setError(t('preview.errorTracing', { error: err.message }));
     } finally {
       tracing = false;
       appState.isProcessing = false;
@@ -85,7 +86,7 @@
     const flatCells = appState.grid.cells.flat();
     const idx = appState.charMap.indexOf(char);
     if (idx < 0 || idx >= flatCells.length) {
-      setError(`Cannot find cell for "${char}"`);
+      setError(t('preview.errorCellNotFound', { char }));
       return;
     }
 
@@ -96,7 +97,7 @@
       const result = traceCell(appState.imageCanvas, cell, refHeight, tracingOpts, appState.smoothing);
 
       if (!result) {
-        setError(`Cell for "${char}" is empty or produced no paths`);
+        setError(t('preview.errorCellEmpty', { char }));
         return;
       }
 
@@ -105,7 +106,7 @@
       buildGlyphEntries();
       buildPreviewFont();
     } catch (err) {
-      setError(`Retrace failed for "${char}": ${err.message}`);
+      setError(t('preview.errorRetrace', { char, error: err.message }));
     }
   }
 
@@ -169,12 +170,12 @@
 </script>
 
 <div class="flex flex-col items-center gap-6">
-  <h2 class="text-2xl font-bold">Preview</h2>
+  <h2 class="text-2xl font-bold">{t('preview.title')}</h2>
 
   {#if tracing}
     <div class="flex flex-col items-center gap-2">
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        Tracing glyphs... {appState.progress}/{appState.progressTotal}
+        {t('preview.tracingProgress', { current: appState.progress, total: appState.progressTotal })}
       </p>
       <div class="w-64 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <div
@@ -186,12 +187,12 @@
         onclick={() => { abortCompute(); tracing = false; appState.isProcessing = false; }}
         class="px-3 py-1 text-xs rounded border border-gray-400 dark:border-gray-500
                text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-      >Cancel</button>
+      >{t('common.cancel')}</button>
     </div>
   {:else if traced}
     <div class="flex flex-wrap items-center gap-3">
       <p class="text-sm text-green-600 dark:text-green-400">
-        {tracedCount} glyphs traced
+        {t('preview.tracedCount', { count: tracedCount })}
       </p>
       <button
         onclick={() => { showGlyphs = !showGlyphs; }}
@@ -200,7 +201,7 @@
                  ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >
-        {showGlyphs ? 'Hide' : 'Show'} Glyphs
+        {showGlyphs ? t('preview.hideGlyphs') : t('preview.showGlyphs')}
       </button>
       <button
         onclick={() => { showKerning = !showKerning; }}
@@ -209,7 +210,7 @@
                  ? 'border-teal-500 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20'
                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'}"
       >
-        Kerning
+        {t('preview.kerning')}
       </button>
     </div>
 
@@ -217,7 +218,7 @@
     <div class="w-full max-w-md flex flex-col items-center gap-2">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
-          Detail:
+          {t('preview.detail')}
           <input
             type="range"
             min="1"
@@ -228,7 +229,7 @@
           <span class="text-xs text-gray-400 w-6 text-center">{appState.detail}</span>
         </label>
         <label class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
-          Smoothing:
+          {t('preview.smoothing')}
           <input
             type="range"
             min="0"
@@ -244,10 +245,10 @@
           class="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600
                  hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors
                  disabled:opacity-40 disabled:cursor-not-allowed"
-        >Re-trace</button>
+        >{t('preview.retrace')}</button>
       </div>
       <p class="text-xs text-gray-400 dark:text-gray-500">
-        Detail: 1 = many points, 10 = fewer points. Smoothing: 0 = sharp, 5 = very smooth curves.
+        {t('preview.detailHelp')}
       </p>
     </div>
 
@@ -270,7 +271,7 @@
     <!-- Preview text -->
     <div class="w-full max-w-lg">
       <label for="preview-text" class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-        Type to preview
+        {t('preview.typeToPreview')}
       </label>
       <input
         id="preview-text"
@@ -278,7 +279,7 @@
         bind:value={previewText}
         class="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200
                focus:ring-2 focus:ring-teal-500 focus:outline-none"
-        placeholder="Type something..."
+        placeholder={t('preview.placeholder')}
       />
     </div>
 
@@ -290,13 +291,13 @@
         </p>
       {:else}
         <p class="text-gray-400 dark:text-gray-500 text-sm italic">
-          Building preview font...
+          {t('preview.buildingFont')}
         </p>
       {/if}
     </div>
   {:else}
     <p class="text-gray-500 dark:text-gray-400 text-sm">
-      Waiting for tracing to start...
+      {t('preview.waitingTracing')}
     </p>
   {/if}
 </div>
