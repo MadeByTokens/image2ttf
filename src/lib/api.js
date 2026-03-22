@@ -115,7 +115,7 @@ function setStatus(status, message = '', progress = 0, total = 0) {
   // Channel 3: window.__image2ttf (already set above on apiState)
 
   // Channel 4: console
-  logger.info(`__API__:${status}:${message || ''}`);
+  logger.log(`__API__:${status}:${message || ''}`);
   if (typeof console !== 'undefined') {
     console.log(`__API__:${titleMsg}`);
   }
@@ -183,7 +183,7 @@ export async function runPipeline(opts = {}) {
     if (!image) throw new Error('No image provided. Pass image as URL or data URI.');
     setStatus('loading', 'Loading image...');
     const canvas = await loadImageToCanvas(image);
-    logger.info(`Image loaded: ${canvas.width}x${canvas.height}`);
+    logger.log(`Image loaded: ${canvas.width}x${canvas.height}`);
 
     // ── 2. Detect grid ──
     setStatus('detecting', 'Detecting character grid...');
@@ -204,7 +204,7 @@ export async function runPipeline(opts = {}) {
     const charMap = charsetFlat.slice(0, flatCells.length);
     while (charMap.length < flatCells.length) charMap.push('?');
 
-    logger.info(`Grid detected: ${grid.cells.length} rows, ${flatCells.length} cells`);
+    logger.log(`Grid detected: ${grid.cells.length} rows, ${flatCells.length} cells`);
 
     // ── 3. Trace glyphs ──
     setStatus('tracing', 'Tracing glyphs...', 0, flatCells.length);
@@ -217,7 +217,7 @@ export async function runPipeline(opts = {}) {
       (current, total) => setStatus('tracing', `Tracing glyphs... ${current}/${total}`, current, total)
     );
 
-    logger.info(`Traced ${glyphMap.size} glyphs`);
+    logger.log(`Traced ${glyphMap.size} glyphs`);
 
     // ── 4. Build font ──
     setStatus('building', 'Building font...');
