@@ -24,6 +24,12 @@
 
   onMount(() => {
     applyTheme(appState.theme);
+
+    function onHashChange() {
+      apiMode = isApiMode();
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   });
 
   function canAdvance() {
